@@ -48,6 +48,9 @@ const LOGIN_CHECK_EXPR =
   `})`;
 
 export default defineBackground(() => {
+  // 点击工具栏图标打开 sidepanel（MV3 sidePanel API）。失败静默：旧 Chrome 无此 API。
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
   /** 取消标志；GSC_CANCEL 置 true，runBatch 下一条 URL 前自检。 */
   let stopRequested = false;
   /** 当前活跃 port；UI 断开即视为放弃（清空以便后续 GSC_START 复用）。 */

@@ -4,6 +4,14 @@ import { fileURLToPath } from 'node:url';
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
+  manifest: {
+    name: 'AutoSEO',
+    description: 'SEO 快捷工具集合：GSC 批量提交 + Ahrefs KD 查询',
+    permissions: ['debugger', 'tabs', 'sidePanel', 'storage'],
+    host_permissions: ['https://search.google.com/*', 'https://ahrefs.com/*'],
+    action: { default_title: 'AutoSEO' },
+    side_panel: { default_path: 'sidepanel/index.html' },
+  },
   vite: () => ({
     resolve: {
       alias: {
