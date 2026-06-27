@@ -43,16 +43,16 @@ beforeEach(() => {
 
 describe('submitOne', () => {
   it('ok 路径：填值→检查→按钮启用→点击→成功 toast', async () => {
-    // submitOne 的 evalJs 调用顺序：
+    // submitOne 的 evalJs 调用顺序（按钮检测前置于分类，见 §2.4 按钮缺失=已索引）：
     //   1) 原生 setter 填值并提交（返回 true）
-    //   2) 分类 isAlreadyIndexed → false
-    //   3) 分类 isNotOwned → false
-    //   4) 分类 isQuota → false
-    //   5) 找按钮 + 读 aria-disabled → { button: true, ariaDisabled: 'false' }
+    //   2) 找按钮 + 读 aria-disabled → { button: true, ariaDisabled: 'false' }
+    //   3) 分类 isAlreadyIndexed → false（按钮在，分支不走）
+    //   4) 分类 isNotOwned → false
+    //   5) 分类 isQuota → false
     //   6) 给按钮打 data-autoseo 标记（返回 true）
     //   7) 重置输入框（返回 true）
     // waitForPredicate（输入就绪 / 结果信号 / 成功 toast）默认 true。
-    mockEvalSeq([true, false, false, false, { button: true, ariaDisabled: 'false' }, true, true]);
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, false, false, true, true]);
 
     const r = await submitOne({ tabId: 1 }, 'https://bottleneck-checker.com/es/');
 
@@ -69,38 +69,48 @@ describe('submitOne', () => {
     );
   });
 
-  it('已索引 → skipped(已索引)，且不点击按钮', async () => {
-    mockEvalSeq([true, /* isAlreadyIndexed */ true]);
+  it('已索引 → skipped(已索引)，且不点击按钮（§2.4：按钮缺失 + 正向文案命中）', async () => {
+    // 按钮缺失 → 触发 isAlreadyIndexed 检测 → true
+    mockEvalSeq([true, { button: false, ariaDisabled: null }, /* isAlreadyIndexed */ true]);
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/已索引/);
     expect(cdp.clickReal).not.toHaveBeenCalled();
   });
 
+  it('按钮在但正向文案命中 → 不判已索引（避免 §2.4 误判）', async () => {
+    // 按钮存在时即使 isAlreadyIndexed 文案命中也不应判已索引；此处走「无配额/不属于」后命中按钮
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, false, false, true, true]);
+    const r = await submitOne({ tabId: 1 }, 'https://x.com/');
+    expect(r.status).toBe('ok');
+  });
+
   it('不属于此域名 → skipped', async () => {
-    mockEvalSeq([true, false, /* isNotOwned */ true]);
+    // 按钮在（isAlreadyIndexed 分支不走）→ isNotOwned true
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, /* isNotOwned */ true]);
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/不属于此域名/);
   });
 
   it('配额 → skipped(配额)', async () => {
-    mockEvalSeq([true, false, false, /* isQuota */ true]);
+    // 按钮在 → isNotOwned false → isQuota true
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, /* isQuota */ true]);
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/配额/);
   });
 
   it('无请求编入索引按钮 → skipped(无请求编入索引按钮)', async () => {
-    // isAlreadyIndexed/isNotOwned/isQuota 均为 false，但按钮不存在
-    mockEvalSeq([true, false, false, false, { button: false, ariaDisabled: 'false' }]);
+    // 按钮缺失：先查 isAlreadyIndexed（false），再 isNotOwned/isQuota 均 false，最后落「无按钮」
+    mockEvalSeq([true, { button: false, ariaDisabled: null }, false, false, false]);
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/无请求编入索引按钮/);
   });
 
   it('按钮 aria-disabled 非 false → skipped(按钮禁用)', async () => {
-    mockEvalSeq([true, false, false, false, { button: true, ariaDisabled: 'true' }]);
+    mockEvalSeq([true, { button: true, ariaDisabled: 'true' }, false, false, false]);
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/按钮禁用/);
@@ -108,7 +118,7 @@ describe('submitOne', () => {
   });
 
   it('点击后成功 toast 超时未出现 → skipped(提交未确认)', async () => {
-    mockEvalSeq([true, false, false, false, { button: true, ariaDisabled: 'false' }, true, true]);
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, false, false, true, true]);
     // 成功 toast 轮询超时（waitForPredicate 返回 false）
     vi.spyOn(cdp, 'waitForPredicate').mockImplementation(async (_t, expr, _o) => {
       // 输入就绪 / 结果信号为 true；successIndicator 为 false
@@ -120,7 +130,7 @@ describe('submitOne', () => {
   });
 
   it('填值用 native setter（evalJs 表达式含 HTMLInputElement.prototype 与 keydown Enter）', async () => {
-    mockEvalSeq([true, false, false, false, { button: true, ariaDisabled: 'false' }, true, true]);
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, false, false, true, true]);
     await submitOne({ tabId: 1 }, 'https://x.com/');
     const fillCall = vi.mocked(cdp.evalJs).mock.calls.find(([, expr]) =>
       typeof expr === 'string' && expr.includes('HTMLInputElement.prototype'),
@@ -135,13 +145,15 @@ describe('submitOne', () => {
 
 describe('runBatch', () => {
   it('连续 3 条配额信号熔断，剩余计为 skipped', async () => {
-    // 每条 submitOne：填值 true → isAlreadyIndexed false → isNotOwned false → isQuota true
+    // 每条 submitOne：填值 true → 按钮探测 → isAlreadyIndexed false → isNotOwned false → isQuota true
     vi.spyOn(cdp, 'evalJs').mockImplementation(async (_t, expr) => {
       if (typeof expr !== 'string') return false as never;
       if (expr === PROBES.isQuota) return true as never;
       if (expr === PROBES.isAlreadyIndexed || expr === PROBES.isNotOwned) return false as never;
       if (expr.includes('HTMLInputElement.prototype')) return true as never; // 填值
-      if (expr.includes('role=button') || expr.includes('data-autoseo')) return true as never; // 找按钮/打标记
+      // 按钮探测 + 打标记：返回 button 对象 / true
+      if (expr.includes('aria-disabled')) return { button: true, ariaDisabled: 'false' } as never;
+      if (expr.includes('data-autoseo')) return true as never;
       return false as never;
     });
     vi.spyOn(cdp, 'waitForPredicate').mockResolvedValue(true);

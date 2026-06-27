@@ -11,6 +11,10 @@ export async function getProjects(): Promise<Project[]> {
 
 async function save(list: Project[]) { await chrome.storage.local.set({ [KEY]: list }); }
 
+// 注：spec §6 列有 PROJECTS_CHANGED 跨视图刷新广播，此处刻意不实现。
+// 侧边栏是单页路由（同一时刻只挂载一个工具页），用户导航到 Projects/GSC 时
+// useProjects 会随组件挂载重新拉取，无需 storage.changed 广播即可保持一致。
+
 export async function addProject(domain: string, label?: string): Promise<Project> {
   const d = domain.trim();
   if (!isValidDomain(d)) throw new Error('invalid domain');
@@ -22,11 +26,17 @@ export async function addProject(domain: string, label?: string): Promise<Projec
 }
 
 export async function updateProject(id: string, patch: Partial<Pick<Project, 'domain' | 'label'>>): Promise<void> {
-  if (patch.domain != null && !isValidDomain(patch.domain)) throw new Error('invalid domain');
+  // 与 addProject 一致：先 trim domain 再校验/合并，避免前后空格导致重复或校验绕过。
+  const trimmedPatch: typeof patch = { ...patch };
+  if (patch.domain != null) {
+    const d = patch.domain.trim();
+    if (!isValidDomain(d)) throw new Error('invalid domain');
+    trimmedPatch.domain = d;
+  }
   const list = await getProjects();
   const i = list.findIndex((p) => p.id === id);
   if (i === -1) throw new Error('project not found');
-  list[i] = { ...list[i], ...patch };
+  list[i] = { ...list[i], ...trimmedPatch };
   await save(list);
 }
 

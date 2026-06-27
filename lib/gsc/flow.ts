@@ -54,8 +54,9 @@ const QUOTA_THRESHOLD = 3;
  *  1. 等输入框就绪（§2.1）。
  *  2. native setter 填值 + 派发 input/keydown Enter（§2.2）。
  *  3. 等待检查结果信号出现（按钮 / 已索引 / 配额 / 不属于，任一命中即就绪）。
- *  4. 分类：isAlreadyIndexed→已索引；isNotOwned→不属于此域名；isQuota→配额。
- *  5. 找「请求编入索引」按钮 + 校验 aria-disabled（§2.3）。
+ *  4. 找「请求编入索引」按钮 + 读 aria-disabled（§2.3，DIV[role=button]）。
+ *  5. 分类（§2.4/§2.3）：isAlreadyIndexed 必须「正向文案命中 且 按钮不存在」；
+ *     isNotOwned→不属于此域名；isQuota→配额；最后判定按钮存在性 / 启用态。
  *  6. 给按钮打 `data-autoseo` 标记后用真实手势点击（§2.3）。
  *  7. 轮询成功 toast（§2.7，单按钮流程，180s）。
  *  8. native setter 清空输入框（§2.8，供下一条复用）。
@@ -83,8 +84,15 @@ export async function submitOne(target: Target, url: string): Promise<SubmitResu
     `(${PROBES.requestIndexingButton}) || (${PROBES.isAlreadyIndexed}) || (${PROBES.isQuota}) || (${PROBES.isNotOwned})`;
   await waitForPredicate(target, resultReady, { timeoutMs: INSPECT_TIMEOUT });
 
-  // ④ 分类（注意顺序：先排除「已索引/不属于/配额」再去找按钮）
-  if (await evalJs<boolean>(target, PROBES.isAlreadyIndexed)) {
+  // ④ 先找「请求编入索引」按钮 + 读 aria-disabled（§2.3：DIV[role=button]，无 disabled 属性）。
+  //    必须在分类前完成：§2.4/§2.3 规定「已索引」的权威信号是 **按钮缺失**，
+  //    即只有当正向文案命中 且 按钮不存在时才判 isAlreadyIndexed。
+  const btnInfo = await evalJs<{ button: boolean; ariaDisabled: string } | null>(target, btnProbeExpr());
+  const hasButton = !!btnInfo?.button;
+
+  // ⑤ 分类（顺序：已索引 → 不属于 → 配额 → 按钮态）
+  //    isAlreadyIndexed 需同时满足「正向文案命中」与「按钮缺失」（§2.4）。
+  if (!hasButton && (await evalJs<boolean>(target, PROBES.isAlreadyIndexed))) {
     return { url, status: 'skipped', reason: '已索引' };
   }
   if (await evalJs<boolean>(target, PROBES.isNotOwned)) {
@@ -94,13 +102,12 @@ export async function submitOne(target: Target, url: string): Promise<SubmitResu
     return { url, status: 'skipped', reason: '配额' };
   }
 
-  // ⑤ 找按钮 + 读 aria-disabled（§2.3：DIV[role=button]，无 disabled 属性）
-  const btnInfo = await evalJs<{ button: boolean; ariaDisabled: string } | null>(target, btnProbeExpr());
-  if (!btnInfo || !btnInfo.button) {
+  // 按钮存在性 / 启用态判定
+  if (!hasButton) {
     return { url, status: 'skipped', reason: '无请求编入索引按钮' };
   }
   // aria-disabled 可能是 'false' / 'true' / 缺省（缺省视为启用）
-  const disabled = btnInfo.ariaDisabled != null && btnInfo.ariaDisabled !== 'false';
+  const disabled = btnInfo!.ariaDisabled != null && btnInfo!.ariaDisabled !== 'false';
   if (disabled) {
     return { url, status: 'skipped', reason: '按钮禁用' };
   }

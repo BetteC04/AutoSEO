@@ -5,7 +5,8 @@ export interface Country {
 
 export const COUNTRIES: Country[] = [
   { code: 'us', label: '美国 (US)' },
-  { code: 'uk', label: '英国 (UK)' },
+  // ISO 3166-1 alpha-2：英国用 'gb'（canonical），'uk' 为非标准保留域后缀，可能被 Ahrefs 404/回退默认。
+  { code: 'gb', label: '英国 (UK)' },
   { code: 'au', label: '澳洲 (AU)' },
   { code: 'ca', label: '加拿大 (CA)' },
   { code: 'in', label: '印度 (IN)' },

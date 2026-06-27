@@ -80,6 +80,17 @@ export default defineBackground(() => {
    * 流程：取项目/设置 → 开 tab → attach → 等 SPA 就绪（§1）→ 登录/权限前置检查（§3）
    *   → runBatch（推 GSC_STATE / GSC_LOG，shouldStop 接 stop 标志）→ 推 GSC_DONE → detach。
    * 任一阶段失败：推 error 日志 + GSC_DONE(0/0/0)，确保 UI 一定能收到结束事件。
+   *
+   * ── SW 生命周期（spec §5/§13，accepted risk for v1）──────────────────────────
+   * (a) 本批次的所有运行态（stopRequested / currentPort / runBatch 进度）都只存在于
+   *     SW 的 module scope；MV3 在长任务中可能回收 SW，丢失这些状态。
+   * (b) 实际风险低：runBatch 在每条 URL 的「成功 toast」等待期间每 6s 调一次 CDP
+   *     evalJs 轮询（SUCCESS_INTERVAL），CDP 事件会重置 SW 的 keepalive 计时器，
+   *     使 SW 在整个批量执行期间保持存活。
+   * (c) 接受的风险：若 SW 仍在批次中途被回收，GSC tab 可能停留在
+   *     「debugger-attached」状态（detach 未执行）。v1 不实现 resume/重连逻辑（YAGNI）；
+   *     用户重新触发 GSC_START 会开新 tab，残留 debugger 可手动关闭或随 tab 关闭释放。
+   * ──────────────────────────────────────────────────────────────────────────
    */
   async function handleStart(
     port: chrome.runtime.Port,
