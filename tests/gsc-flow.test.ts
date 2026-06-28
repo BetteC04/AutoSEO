@@ -6,7 +6,7 @@ import { PROBES } from '../lib/gsc/selectors';
 /**
  * GSC flow 单测。
  *
- * 策略：直接 mock `lib/cdp/actions` 的三个原语（evalJs / waitForPredicate / clickReal），
+ * 策略：直接 mock `lib/cdp/actions` 的两个原语（evalJs / waitForPredicate），
  * 让 `submitOne` 的步骤机在受控输入下推进，从而验证「真实流程判定」而非自证。
  *
  * mockEvalSeq：按 evalJs 调用顺序返回值（queue）。
@@ -16,7 +16,6 @@ function mockEvalSeq(values: unknown[]) {
   const q = [...values];
   vi.spyOn(cdp, 'evalJs').mockImplementation(async () => q.shift() as never);
   vi.spyOn(cdp, 'waitForPredicate').mockResolvedValue(true);
-  vi.spyOn(cdp, 'clickReal').mockResolvedValue(true);
 }
 
 /**
@@ -34,7 +33,6 @@ function mockOkPath() {
     return true as never;
   });
   vi.spyOn(cdp, 'waitForPredicate').mockResolvedValue(true);
-  vi.spyOn(cdp, 'clickReal').mockResolvedValue(true);
 }
 
 beforeEach(() => {
@@ -49,7 +47,7 @@ describe('submitOne', () => {
     //   3) 分类 isAlreadyIndexed → false（按钮在，分支不走）
     //   4) 分类 isNotOwned → false
     //   5) 分类 isQuota → false
-    //   6) 给按钮打 data-autoseo 标记（返回 true）
+    //   6) 页面内 el.click() 点击按钮（返回 true）
     //   7) 重置输入框（返回 true）
     // waitForPredicate（输入就绪 / 结果信号 / 成功 toast）默认 true。
     mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, false, false, true, true]);
@@ -59,8 +57,11 @@ describe('submitOne', () => {
     expect(r.status).toBe('ok');
     expect(r.url).toBe('https://bottleneck-checker.com/es/');
     expect(r.reason).toBeUndefined();
-    // 关键：用真实手势点击了被打标记的按钮
-    expect(cdp.clickReal).toHaveBeenCalledWith({ tabId: 1 }, '[data-autoseo="1"]');
+    // 关键：用页面内 el.click() 点击「请求编入索引」按钮（chrome.debugger 后台 tab 下可靠）
+    const clickCall = vi.mocked(cdp.evalJs).mock.calls.find(([, expr]) =>
+      typeof expr === 'string' && expr.includes('.click()') && expr.includes('请求编入索引'),
+    );
+    expect(clickCall).toBeTruthy();
     // 关键：成功 toast 轮询用了 180s 超时（gsc-probe §2.7）
     expect(cdp.waitForPredicate).toHaveBeenCalledWith(
       { tabId: 1 },
@@ -75,27 +76,29 @@ describe('submitOne', () => {
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/已索引/);
-    expect(cdp.clickReal).not.toHaveBeenCalled();
   });
 
-  it('按钮在但正向文案命中 → 不判已索引（避免 §2.4 误判）', async () => {
-    // 按钮存在时即使 isAlreadyIndexed 文案命中也不应判已索引；此处走「无配额/不属于」后命中按钮
-    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, false, false, true, true]);
-    const r = await submitOne({ tabId: 1 }, 'https://x.com/');
-    expect(r.status).toBe('ok');
+  it('已索引（按钮仍存在）→ skipped(已索引)，不点击（实测：已索引页面也显示按钮）', async () => {
+    // 实测（2026-06-28）：已索引页面状态文案「网址已收录到 Google」，且「请求编入索引」
+    // 按钮仍存在(DIV[role=button], aria-disabled=false)。判定必须以状态文案为准，不能依赖按钮缺失。
+    // evalJs 顺序：填值 true → 按钮探测{button:true,ad:'false'} → isAlreadyIndexed true → 返回 skipped
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, /* isAlreadyIndexed */ true]);
+    const r = await submitOne({ tabId: 1 }, 'https://bottleneck-checker.com/es/');
+    expect(r.status).toBe('skipped');
+    expect(r.reason).toMatch(/已索引/);
   });
 
   it('不属于此域名 → skipped', async () => {
-    // 按钮在（isAlreadyIndexed 分支不走）→ isNotOwned true
-    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, /* isNotOwned */ true]);
+    // isAlreadyIndexed false → isNotOwned true
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, /* isAlreadyIndexed */ false, /* isNotOwned */ true]);
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/不属于此域名/);
   });
 
   it('配额 → skipped(配额)', async () => {
-    // 按钮在 → isNotOwned false → isQuota true
-    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, false, /* isQuota */ true]);
+    // isAlreadyIndexed false → isNotOwned false → isQuota true
+    mockEvalSeq([true, { button: true, ariaDisabled: 'false' }, /* isAlreadyIndexed */ false, /* isNotOwned */ false, /* isQuota */ true]);
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/配额/);
@@ -114,7 +117,6 @@ describe('submitOne', () => {
     const r = await submitOne({ tabId: 1 }, 'https://x.com/');
     expect(r.status).toBe('skipped');
     expect(r.reason).toMatch(/按钮禁用/);
-    expect(cdp.clickReal).not.toHaveBeenCalled();
   });
 
   it('点击后成功 toast 超时未出现 → skipped(提交未确认)', async () => {

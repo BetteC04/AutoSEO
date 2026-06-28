@@ -8,15 +8,17 @@
  *    然后派发 `keydown` Enter 事件触发检查（没有放大镜按钮可点）。见 §2.2。
  *  - 「请求编入索引」按钮是 **`DIV[role=button]`**（不是 `<button>`），没有 `disabled`
  *    属性，启用状态由 `aria-disabled="false"` 表征。见 §2.3。
+ *  - 点击用**页面内 `el.click()`**（非 Input.dispatchMouseEvent）：chrome.debugger 后台 tab
+ *    下后者不触发 React 点击（已实测），前者是 Runtime.evaluate 里的纯 DOM 调用，可靠。见 §2.3。
  *  - 点击后是 **单按钮流程**：弹出「正在测试实际网址可否编入索引」进度弹窗（1-2 分钟），
  *    自动完成后出现成功 toast（无需点第二个提交按钮）。见 §2.7。
  *
  * 因此 Task 12 的 flow = 等输入就绪 → native setter 填值 + Enter → 等结果信号 →
- * 分类（已索引/不属于/配额）→ 找按钮并校验 aria-disabled → 真实手势点击 →
+ * 分类（已索引/不属于/配额）→ 找按钮并校验 aria-disabled → 页面内 el.click() 点击 →
  * 轮询成功 toast（180s）→ 清空输入框（供下一条复用）。
  */
 
-import { clickReal, evalJs, waitForPredicate } from '../cdp/actions';
+import { evalJs, waitForPredicate } from '../cdp/actions';
 import { type Target } from '../cdp/client';
 import { PROBES } from './selectors';
 
@@ -55,8 +57,9 @@ const QUOTA_THRESHOLD = 3;
  *  2. native setter 填值 + 派发 input/keydown Enter（§2.2）。
  *  3. 等待检查结果信号出现（按钮 / 已索引 / 配额 / 不属于，任一命中即就绪）。
  *  4. 找「请求编入索引」按钮 + 读 aria-disabled（§2.3，DIV[role=button]）。
- *  5. 分类（§2.4/§2.3）：isAlreadyIndexed 必须「正向文案命中 且 按钮不存在」；
- *     isNotOwned→不属于此域名；isQuota→配额；最后判定按钮存在性 / 启用态。
+ *  5. 分类：isAlreadyIndexed（状态文案命中）→ 已索引；isNotOwned→不属于此域名；
+ *     isQuota→配额；最后判定按钮存在性 / 启用态。已索引判定**不**依赖按钮缺失
+ *     （实测两态都有按钮，见 gsc-probe §2.4 修订）。
  *  6. 给按钮打 `data-autoseo` 标记后用真实手势点击（§2.3）。
  *  7. 轮询成功 toast（§2.7，单按钮流程，180s）。
  *  8. native setter 清空输入框（§2.8，供下一条复用）。
@@ -85,14 +88,15 @@ export async function submitOne(target: Target, url: string): Promise<SubmitResu
   await waitForPredicate(target, resultReady, { timeoutMs: INSPECT_TIMEOUT });
 
   // ④ 先找「请求编入索引」按钮 + 读 aria-disabled（§2.3：DIV[role=button]，无 disabled 属性）。
-  //    必须在分类前完成：§2.4/§2.3 规定「已索引」的权威信号是 **按钮缺失**，
-  //    即只有当正向文案命中 且 按钮不存在时才判 isAlreadyIndexed。
+  //    ⚠️ 按钮探测**不能**用于判定「已索引」——实测（2026-06-28，gsc-probe §2.4 修订）：
+  //    已索引与未索引页面都会显示该按钮（aria-disabled=false）。已索引与否只看状态文案。
   const btnInfo = await evalJs<{ button: boolean; ariaDisabled: string } | null>(target, btnProbeExpr());
   const hasButton = !!btnInfo?.button;
 
   // ⑤ 分类（顺序：已索引 → 不属于 → 配额 → 按钮态）
-  //    isAlreadyIndexed 需同时满足「正向文案命中」与「按钮缺失」（§2.4）。
-  if (!hasButton && (await evalJs<boolean>(target, PROBES.isAlreadyIndexed))) {
+  //    「已索引」只看 isAlreadyIndexed 状态文案，**不**叠加按钮缺失条件。否则已索引 URL
+  //    （按钮仍在）会跳过本分支，被误判为可提交并点击「请求编入索引」。
+  if (await evalJs<boolean>(target, PROBES.isAlreadyIndexed)) {
     return { url, status: 'skipped', reason: '已索引' };
   }
   if (await evalJs<boolean>(target, PROBES.isNotOwned)) {
@@ -112,9 +116,17 @@ export async function submitOne(target: Target, url: string): Promise<SubmitResu
     return { url, status: 'skipped', reason: '按钮禁用' };
   }
 
-  // ⑥ 给按钮打标记，再用真实手势点击（§2.3）
-  await tagProbeElement(target, 'requestIndexingButton');
-  await clickReal(target, '[data-autoseo="1"]');
+  // ⑥ 点击「请求编入索引」。⚠️ chrome.debugger 后台 tab 下 Input.dispatchMouseEvent 不触发 React
+  //    点击（已实测）；改用页面内 el.click()——Runtime.evaluate 里的纯 DOM 调用，后台 tab 可靠（§2.3）。
+  const clickExpr =
+    `(() => {` +
+    `const b = ${PROBES.requestIndexingButton};` +
+    `if (!b) return false;` +
+    `b.scrollIntoView({ block: 'center' });` +
+    `b.click();` +
+    `return true;` +
+    `})()`;
+  await evalJs<boolean>(target, clickExpr);
 
   // ⑦ 单按钮流程：轮询成功 toast（§2.7，180s / 6s 间隔）
   const ok = await waitForPredicate(target, PROBES.successIndicator, {
@@ -203,23 +215,6 @@ function btnProbeExpr(): string {
     `if (!b) return { button: false, ariaDisabled: null };` +
     `return { button: true, ariaDisabled: b.getAttribute('aria-disabled') };` +
     `})()`
-  );
-}
-
-/**
- * 给 PROBES 中「返回元素」的表达式对应的目标打 `data-autoseo="1"` 标记，
- * 随后即可用 `[data-autoseo="1"]` 作为 CSS selector 供 clickReal 定位。
- * 每次先清除旧标记，避免误定位到上一个目标。
- */
-async function tagProbeElement(target: Target, key: 'requestIndexingButton' | 'inspectInput'): Promise<void> {
-  await evalJs<boolean>(
-    target,
-    `(() => {` +
-      `document.querySelectorAll('[data-autoseo]').forEach((e) => e.removeAttribute('data-autoseo'));` +
-      `const el = ${PROBES[key]};` +
-      `if (el) el.setAttribute('data-autoseo', '1');` +
-      `return true;` +
-      `})()`,
   );
 }
 

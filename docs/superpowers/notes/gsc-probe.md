@@ -8,8 +8,11 @@
 - 环境：web-access CDP proxy（`http://localhost:3456`）→ 本机 Edge（9222）。
   VPN 已生效，`search.google.com` 可达（不再 `ERR_TIMED_OUT`）。
 - 被驱动的 Edge 已登录拥有 `bottleneck-checker.com` 的 Google 账号，账号语言为**中文**（标题「概述」「网址检查」）。
-- 测试 URL：`https://bottleneck-checker.com/es/`（当前**未被编入索引**，符合可请求条件）。
+- 初版测试 URL：`https://bottleneck-checker.com/es/`（当时**未被编入索引**，已完整跑通请求流程；该次提交成功后现已被 Google 收录）。
 - 完整跑通：填 URL → 回车 → 检查结果加载 → 点击「请求编入索引」→ 实时测试弹窗 → 自动完成 → 成功 toast。
+- 2026-06-28 复测：用 `bottleneck-checker.com` 资源下两个 URL 对照两态——
+  `/es/`（已索引，标题「网址已收录到 Google」）、`/zh/`（未索引，标题「网址尚未收录到 Google」），
+  据此修正了 §2.4「已索引页面按钮不出现」的错误推断（实测两态都显示按钮），并修正了 flow 的已索引判定。
 - **重要运行事实**：GSC 请求编入索引是**单按钮流程**——点一次「请求编入索引」后会弹出
   「正在测试实际网址可否编入索引」的进度弹窗（含「取消」按钮），1-2 分钟后自动提交并显示成功 toast，
   **不需要**再点第二个「提交/同意」按钮。Task 12 的 flow 因此简化为：点按钮 → 轮询 success toast。
@@ -82,19 +85,30 @@ i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyC
 - ✅ disabled 状态：**`aria-disabled="false"`**（已启用可直接点）。
   注意此元素**没有** `disabled` 属性（DIV 无该属性），判 disabled 只能读 `aria-disabled`。
 - 等待条件：URL 进入 `/inspect` 后轮询按钮出现（实测检查结果 ~10-15s 出现）。
+- ⚠️ **点击方式（2026-06-28 chrome.debugger 复测修订）**：用**页面内 `el.click()`**，**不要**用
+  `Input.dispatchMouseEvent`。后者在 chrome.debugger **后台 tab**（`active:false`）下不触发 React
+  点击（实测：命令成功返回但 Live Test 不弹，`[role=dialog]` 数不变）；`el.click()` 是 Runtime.evaluate
+  里的纯 DOM 调用，不依赖渲染层，后台 tab 可靠（实测 `dialogs 5→6` 触发 Live Test）。probe 当时
+  （web-access proxy）下 `Input.dispatchMouseEvent` 可用，但插件运行时（chrome.debugger）必须用 `el.click()`。
 
-### 2.4 `isAlreadyIndexed` — URL 已被编入索引  ✅ 已验证（反向）
+### 2.4 `isAlreadyIndexed` — URL 已被编入索引  ✅ 已验证（双向，2026-06-28 复测）
 ```js
-/此网页已编入索引|网址已被.*收录|URL is on Google|已编入索引/i.test(document.body.innerText)
-  && !document.body.innerText.includes('网址尚未收录到 Google')
+/网址已收录到 Google|URL is on Google/i.test(document.body.innerText)
+  && !/网址尚未收录到 Google|URL is not on Google/i.test(document.body.innerText)
 ```
-- ✅ **本测试 URL 的真实状态是「未编入索引」**，对应文案：
-  - 「网址尚未收录到 Google」
-  - 「此网页未编入索引。未编入索引的网页无法显示在 Google 搜索结果中。」
-  - 「网页未编入索引：Google 无法识别此网址」
-- **未实测到「已编入索引」页面**（无法在已索引 URL 上触发请求）。
-  推断真实文案为「此网页已编入索引」/「URL is on Google」，且此时 `requestIndexingButton` 不出现。
-  Task 12 应同时满足「正向文案命中 且 按钮不存在」再判 `isAlreadyIndexed`。
+- ✅ **两态均已实测**（2026-06-28 复测，`bottleneck-checker.com` 资源下）：
+  - 已索引 `https://bottleneck-checker.com/es/`（初版那次提交后被 Google 收录）：
+    标题文案 **「网址已收录到 Google」**，详情 **「网页已编入索引」**。
+  - 未索引 `https://bottleneck-checker.com/zh/`：
+    标题文案 **「网址尚未收录到 Google」**，详情「此网页未编入索引…」「网页未编入索引：Google 无法识别此网址」，
+    另含干扰文案「仅已编入索引的网址有增强选项」（带「已编入索引」字样）。
+- ⚠️ **关键修正（推翻初版推断）**：**已索引页面同样显示「请求编入索引」按钮**
+  （DIV[role=button]，aria-disabled=false，文案「请求编入索引再次提交请求」）。
+  **按钮存在性不能区分已索引/未索引**。
+  - 初版（Task 10）只实测到未索引态，错误推断「已索引时按钮不出现」「按钮缺失=已索引信号」。
+  - 因此 flow 的已索引判定**必须以状态文案为准**，**不能**叠加「按钮缺失」条件——
+    否则已索引 URL 会跳过已索引分支、被误点击「请求编入索引」（这正是 2026-06-28 修复的 bug）。
+- 正则只用标题级主文案精确匹配 + 反向排除，避免宽泛的「已编入索引」（未索引页干扰文案会命中）。
 
 ### 2.5 `isQuota` — 配额耗尽提示  ⚠️ 未触发（保留推断）
 ```js

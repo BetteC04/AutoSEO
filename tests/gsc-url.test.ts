@@ -56,9 +56,10 @@ describe('selectors', () => {
     expect(PROBES.requestIndexingButton).toContain('请求编入索引');
   });
 
-  it('isAlreadyIndexed 排除「尚未收录」文案', () => {
+  it('isAlreadyIndexed 匹配真实主文案（已收录）且排除「尚未收录」', () => {
+    // 实测（2026-06-28）：已索引标题「网址已收录到 Google」，未索引标题「网址尚未收录到 Google」。
+    expect(PROBES.isAlreadyIndexed).toContain('网址已收录到 Google');
     expect(PROBES.isAlreadyIndexed).toContain('网址尚未收录到 Google');
-    expect(PROBES.isAlreadyIndexed).toContain('已编入索引');
   });
 
   it('successIndicator 匹配真实成功 toast 文案', () => {

@@ -34,14 +34,18 @@ export const PROBES = {
     `)`,
 
   /**
-   * URL 已被编入索引。
-   * 注意反向排除：测试 URL 处于「未编入索引」状态时文案为「网址尚未收录到 Google」，
-   * 需排除该文案以避免误判。
-   * Task 12 应同时满足「正向文案命中 且 按钮不存在」再判 isAlreadyIndexed。
+   * URL 已被编入索引（实测 2026-06-28，gsc-probe §2.4 修订）。
+   * 真实状态文案（中文账号）：
+   *  - 已索引：标题「网址已收录到 Google」+ 详情「网页已编入索引」。
+   *  - 未索引：标题「网址尚未收录到 Google」+ 详情「此网页未编入索引…」
+   *           + 干扰文案「仅已编入索引的网址有增强选项」。
+   * 用标题级主文案精确匹配 + 反向排除，**避免**宽泛的「已编入索引」字样
+   * （未索引页的干扰文案会命中它，原先只能靠反向 includes 兜底）。
+   * ⚠️ 判定时**不要**叠加「按钮缺失」条件——已索引与未索引页面都显示「请求编入索引」按钮。
    */
   isAlreadyIndexed:
-    `/此网页已编入索引|网址已被.*收录|URL is on Google|已编入索引/i.test(document.body.innerText)` +
-    ` && !document.body.innerText.includes('网址尚未收录到 Google')`,
+    `/网址已收录到 Google|URL is on Google/i.test(document.body.innerText)` +
+    ` && !/网址尚未收录到 Google|URL is not on Google/i.test(document.body.innerText)`,
 
   /**
    * 配额耗尽提示。⚠️ 未触发，保留推断兜底。
