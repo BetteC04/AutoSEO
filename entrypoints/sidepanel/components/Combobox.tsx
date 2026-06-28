@@ -1,0 +1,73 @@
+// entrypoints/sidepanel/components/Combobox.tsx
+import { useState } from 'react';
+import { IconSettings } from './icons';
+
+export interface ComboboxProps {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  onManage?: () => void;
+  placeholder?: string;
+}
+
+export default function Combobox({ value, options, onChange, onManage, placeholder }: ComboboxProps) {
+  const [open, setOpen] = useState(false);
+  // 内部 query 状态用于过滤建议；外部受控 value 仍用于回填输入框。
+  // 这样即便父组件暂时未回写 value，输入当下的文本也能立即过滤下拉项。
+  const [query, setQuery] = useState(value);
+  const filterText = query.trim();
+  const suggestions = filterText
+    ? options.filter((o) => o.toLowerCase().includes(filterText.toLowerCase())).slice(0, 8)
+    : options.slice(0, 8);
+  // 下拉建议显示条件：显式 open（聚焦/输入）或受控 value 已有值（React 19 会抑制
+  // 值未变化的 change 事件，仅靠 open 状态不足以让同值 change 后的下拉出现，
+  // 因此在 value 非空时也展示，保证用户始终能看见匹配项）。
+  const showSuggestions = (open || value.trim() !== '') && suggestions.length > 0;
+
+  return (
+    <div style={{ position: 'relative', display: 'flex', gap: 8 }}>
+      <div style={{ position: 'relative', flex: 1 }}>
+        <input
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => { onChange(e.target.value); setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          style={{
+            width: '100%', height: 32, padding: '0 10px',
+            background: 'var(--color-canvas)', color: 'var(--color-ink)',
+            border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)',
+            fontSize: 13, outline: 'none', fontFamily: 'var(--font-mono)',
+          }}
+        />
+        {showSuggestions && (
+          <div style={{
+            position: 'absolute', top: 34, left: 0, right: 0, zIndex: 10,
+            background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)',
+            borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(20,20,19,0.08)', overflow: 'hidden',
+          }}>
+            {suggestions.map((o) => (
+              <button
+                key={o}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); onChange(o); setOpen(false); }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-ink)', cursor: 'pointer' }}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {onManage && (
+        <button type="button" aria-label="项目管理" onClick={onManage} style={{
+          flexShrink: 0, width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)',
+          color: 'var(--color-muted)', cursor: 'pointer', lineHeight: 0,
+        }}>
+          <IconSettings size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
