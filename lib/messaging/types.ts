@@ -60,3 +60,52 @@ export interface GscDone {
 }
 
 export type GscEvent = GscState | GscLog | GscDone;
+
+// ---------------------------------------------------------------------------
+// Bing Webmaster Tools「Request indexing」批量执行协议（与 GSC 同构，type 用 BING_ 前缀）。
+// 实现依据 docs/superpowers/notes/bing-probe.md。复用上面的 SubmitStatus / SubmitResult。
+// ---------------------------------------------------------------------------
+
+/** 启动一次 Bing 批量「Request indexing」。 */
+export interface BingStart {
+  type: 'BING_START';
+  /** 目标项目（提供域名），background 用其 domain 拼 Bing URL Inspection URL 的 siteUrl 参数。 */
+  projectId: string;
+  /** 待提交的 URL 列表，逐条经 runBatch 执行。 */
+  urls: string[];
+}
+
+/** 取消正在运行的 Bing 批次（background 在下一条 URL 前检查 stop 标志）。 */
+export interface BingCancel {
+  type: 'BING_CANCEL';
+}
+
+export type BingRequest = BingStart | BingCancel;
+
+/** 进度/状态推送。每完成一条 URL 即发一次（含累计结果数组）。 */
+export interface BingState {
+  type: 'BING_STATE';
+  state: 'running' | 'done' | 'canceled';
+  total: number;
+  done: number;
+  currentUrl?: string;
+  results: SubmitResult[];
+}
+
+/** 日志推送。phase 标识来源阶段（system / inspect / submit / …），便于 UI 分组展示。 */
+export interface BingLog {
+  type: 'BING_LOG';
+  level: 'info' | 'warn' | 'error';
+  phase: string;
+  message: string;
+}
+
+/** 批次结束汇总。无论正常结束、取消、登录失败都会发一次。 */
+export interface BingDone {
+  type: 'BING_DONE';
+  ok: number;
+  failed: number;
+  skipped: number;
+}
+
+export type BingEvent = BingState | BingLog | BingDone;

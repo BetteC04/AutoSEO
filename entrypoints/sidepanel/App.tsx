@@ -2,6 +2,7 @@ import { useState } from 'react';
 import SideNav, { type Route } from './components/SideNav';
 import AhrefsTool from './pages/AhrefsTool';
 import GscTool from './pages/GscTool';
+import BingTool from './pages/BingTool';
 import Projects from './pages/Projects';
 
 export default function App() {
@@ -11,6 +12,7 @@ export default function App() {
       <SideNav route={route} onNavigate={setRoute} />
       <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
         {route === 'gsc' && <GscTool />}
+        {route === 'bing' && <BingTool />}
         {route === 'ahrefs' && <AhrefsTool />}
         {route === 'projects' && <Projects />}
       </main>

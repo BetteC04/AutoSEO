@@ -15,3 +15,14 @@ export const GSC_PORT_NAME = 'gsc-runner';
 export function createGscPort(): chrome.runtime.Port {
   return chrome.runtime.connect({ name: GSC_PORT_NAME });
 }
+
+/** background 与 side panel 之间约定的 Bing runner port 名。 */
+export const BING_PORT_NAME = 'bing-runner';
+
+/**
+ * 建立到 background 的 Bing runner port。
+ * 调用方负责 `port.onMessage.addListener` 接收 `BingEvent`、`port.postMessage` 发送 `BingRequest`。
+ */
+export function createBingPort(): chrome.runtime.Port {
+  return chrome.runtime.connect({ name: BING_PORT_NAME });
+}

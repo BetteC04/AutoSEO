@@ -23,10 +23,13 @@ import { evalJs, waitForLoad, waitForPredicate } from '../lib/cdp/actions';
 import { runBatch } from '../lib/gsc/flow';
 import { buildGscUrl } from '../lib/gsc/url';
 import { PROBES } from '../lib/gsc/selectors';
+import { runBatch as bingRunBatch } from '../lib/bing/flow';
+import { buildBingUrl } from '../lib/bing/url';
+import { PROBES as BING_PROBES } from '../lib/bing/selectors';
 import { getProjectById } from '../lib/storage/projects';
 import { getSettings } from '../lib/storage/settings';
-import { GSC_PORT_NAME } from '../lib/messaging/protocol';
-import type { GscRequest, GscEvent } from '../lib/messaging/types';
+import { GSC_PORT_NAME, BING_PORT_NAME } from '../lib/messaging/protocol';
+import type { GscRequest, GscEvent, BingRequest, BingEvent } from '../lib/messaging/types';
 
 /**
  * GSC SPA 加载完成的等待超时。
@@ -47,6 +50,21 @@ const LOGIN_CHECK_EXPR =
   `needsVerify: ${PROBES.isNotOwned}` +
   `})`;
 
+/** Bing SPA 加载完成的等待超时（与 GSC 同量级，bing-probe §1）。 */
+const BING_LOAD_TIMEOUT_MS = 30000;
+const BING_LOAD_INTERVAL_MS = 1000;
+
+/**
+ * Bing 登录态检测表达式（bing-probe §3）。
+ * Bing 的 siteUrl 资源权限由 URL 参数锁定，无 GSC 的 needsVerify 分支；未登录会跳登录页。
+ */
+const BING_LOGIN_CHECK_EXPR =
+  `JSON.stringify({` +
+  `url: location.href,` +
+  `hasInspectInput: !!(${BING_PROBES.inspectInput}),` +
+  `isLoginScreen: /login|signin|account\\.live\\.com|identity/i.test(location.href)` +
+  `})`;
+
 export default defineBackground(() => {
   // 点击工具栏图标打开 sidepanel（MV3 sidePanel API）。失败静默：旧 Chrome 无此 API。
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -57,21 +75,32 @@ export default defineBackground(() => {
   let currentPort: chrome.runtime.Port | null = null;
 
   chrome.runtime.onConnect.addListener((port) => {
-    if (port.name !== GSC_PORT_NAME) return;
-    currentPort = port;
+    if (port.name === GSC_PORT_NAME) {
+      currentPort = port;
 
-    port.onMessage.addListener((msg: GscRequest) => {
-      // GSC_START 是异步长流程；GSC_CANCEL 仅置标志。
-      if (msg.type === 'GSC_START') {
-        void handleStart(port, msg);
-      } else if (msg.type === 'GSC_CANCEL') {
-        stopRequested = true;
-      }
-    });
+      port.onMessage.addListener((msg: GscRequest) => {
+        // GSC_START 是异步长流程；GSC_CANCEL 仅置标志。
+        if (msg.type === 'GSC_START') {
+          void handleStart(port, msg);
+        } else if (msg.type === 'GSC_CANCEL') {
+          stopRequested = true;
+        }
+      });
 
-    port.onDisconnect.addListener(() => {
-      if (currentPort === port) currentPort = null;
-    });
+      port.onDisconnect.addListener(() => {
+        if (currentPort === port) currentPort = null;
+      });
+    } else if (port.name === BING_PORT_NAME) {
+      // Bing runner：闭包持有独立 stop 标志（与 GSC 互不干扰）。
+      let bingStop = false;
+      port.onMessage.addListener((msg: BingRequest) => {
+        if (msg.type === 'BING_START') {
+          void handleBingStart(port, msg, () => bingStop);
+        } else if (msg.type === 'BING_CANCEL') {
+          bingStop = true;
+        }
+      });
+    }
   });
 
   /**
@@ -178,12 +207,96 @@ export default defineBackground(() => {
     }
   }
 
-  /** 经 port 推送一个 GscEvent；若 port 已断开则静默忽略。 */
-  function emit(port: chrome.runtime.Port, e: GscEvent): void {
+  /** 经 port 推送一个 GscEvent / BingEvent；若 port 已断开则静默忽略。 */
+  function emit(port: chrome.runtime.Port, e: GscEvent | BingEvent): void {
     try {
       port.postMessage(e);
     } catch {
       // port 已断开（UI 关闭/刷新），忽略。
+    }
+  }
+
+  /**
+   * 编排一次 Bing 批量执行（与 handleStart 同构，换 Bing URL/flow/事件）。
+   *
+   * 流程：取项目 → 开 tab → attach → 等 SPA 就绪（§1）→ 登录前置检查（§3）
+   *   → bingRunBatch（推 BING_STATE / BING_LOG，shouldStop 接闭包 stop 标志）→ 推 BING_DONE → detach。
+   * 任一阶段失败：推 error 日志 + BING_DONE，确保 UI 一定能收到结束事件。
+   * Bing 无需 accountIndex（siteUrl 直接用 domain），故不读 settings。
+   */
+  async function handleBingStart(
+    port: chrome.runtime.Port,
+    msg: { projectId: string; urls: string[] },
+    shouldStop: () => boolean,
+  ): Promise<void> {
+    const project = await getProjectById(msg.projectId);
+    if (!project) {
+      emit(port, { type: 'BING_LOG', level: 'error', phase: 'system', message: '项目不存在' });
+      emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: 0 });
+      return;
+    }
+
+    const bingUrl = buildBingUrl(project.domain);
+
+    emit(port, { type: 'BING_LOG', level: 'info', phase: 'system', message: '打开 Bing…' });
+    const tab = await chrome.tabs.create({ url: bingUrl, active: false });
+    const target: Target = { tabId: tab.id! };
+    await attach(target);
+
+    try {
+      // 先等 readyState（best-effort），再以 href+输入框 为权威就绪信号（§1）。
+      await waitForLoad(target).catch(() => undefined);
+      const ready = await waitForPredicate(
+        target,
+        `location.href.startsWith('https://www.bing.com/webmasters/urlinspection') && !!(${BING_PROBES.inspectInput})`,
+        { timeoutMs: BING_LOAD_TIMEOUT_MS, intervalMs: BING_LOAD_INTERVAL_MS },
+      );
+      if (!ready) {
+        emit(port, { type: 'BING_LOG', level: 'error', phase: 'system', message: 'Bing 页面加载超时' });
+        emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: 0 });
+        return;
+      }
+
+      // 登录态前置检查（§3）：未登录则不驱动登录，直接以 0 汇总结束。
+      const check = await evalJs<{ isLoginScreen: boolean }>(target, BING_LOGIN_CHECK_EXPR);
+      if (check.isLoginScreen) {
+        emit(port, { type: 'BING_LOG', level: 'error', phase: 'system', message: '未登录 Bing Webmaster，请在浏览器登录后重试' });
+        emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: 0 });
+        return;
+      }
+
+      // 批量提交；shouldStop 接闭包 stop 标志，BING_CANCEL 可在下一条 URL 前中止。
+      const summary = await bingRunBatch(target, msg.urls, {
+        onProgress: (s) =>
+          emit(port, {
+            type: 'BING_STATE',
+            state: 'running',
+            total: s.total,
+            done: s.done,
+            currentUrl: s.currentUrl,
+            results: s.results,
+          }),
+        onLog: (e) =>
+          emit(port, { type: 'BING_LOG', level: e.level, phase: e.phase, message: e.message }),
+        shouldStop,
+      });
+
+      emit(port, {
+        type: 'BING_DONE',
+        ok: summary.ok,
+        failed: summary.failed,
+        skipped: summary.skipped,
+      });
+    } catch (e) {
+      emit(port, {
+        type: 'BING_LOG',
+        level: 'error',
+        phase: 'system',
+        message: (e as Error).message ?? String(e),
+      });
+      emit(port, { type: 'BING_DONE', ok: 0, failed: 1, skipped: 0 });
+    } finally {
+      await detach(target).catch(() => undefined);
     }
   }
 });
