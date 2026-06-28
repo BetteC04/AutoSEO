@@ -11,11 +11,14 @@ export async function waitForLoad(target: Target, timeoutMs = 30000): Promise<vo
 }
 
 export async function evalJs<T>(target: Target, expression: string): Promise<T> {
-  const r = await send<{ result?: { result?: { value?: T }; exceptionDetails?: { text?: string } } }>(
+  // chrome.debugger.sendCommand 对 Runtime.evaluate 的 resolve 值是单层结构
+  // { result: <RemoteObject>, exceptionDetails? }：exceptionDetails 与 result 平级，
+  // 而非嵌套在 result 内。与 waitForLoad 的解构保持一致。
+  const r = await send<{ result?: { value?: T }; exceptionDetails?: { text?: string } }>(
     target, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true },
   );
-  if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.text ?? 'eval failed');
-  return r.result!.result!.value as T;
+  if (r.exceptionDetails) throw new Error(r.exceptionDetails.text ?? 'eval failed');
+  return r.result!.value as T;
 }
 
 export async function waitForPredicate(

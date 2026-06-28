@@ -4,10 +4,12 @@ import { evalJs, typeText, pressEnter } from '../lib/cdp/actions';
 
 describe('cdp client', () => {
   it('send 调用 chrome.debugger.sendCommand', async () => {
-    const spy = vi.spyOn(chrome.debugger, 'sendCommand' as any).mockResolvedValue({ result: { result: { value: 42 } } } as any);
+    // chrome.debugger.sendCommand 对 Runtime.evaluate 的 resolve 值是单层结构
+    // { result: <RemoteObject>, exceptionDetails? }（顶层 result 已被剥离）。
+    const spy = vi.spyOn(chrome.debugger, 'sendCommand' as any).mockResolvedValue({ result: { value: 42 } } as any);
     const r = await send({ tabId: 1 }, 'Runtime.evaluate', { expression: '6*7' });
     expect(spy).toHaveBeenCalledWith({ tabId: 1 }, 'Runtime.evaluate', { expression: '6*7' });
-    expect((r as any).result.result.value).toBe(42);
+    expect((r as any).result.value).toBe(42);
     spy.mockRestore();
   });
   it('attach/detach 用 1.3', async () => {
@@ -22,10 +24,17 @@ describe('cdp client', () => {
 });
 
 describe('cdp actions', () => {
-  it('evalJs 提取 value', async () => {
-    vi.spyOn(chrome.debugger, 'sendCommand' as any).mockResolvedValue({ result: { result: { value: 'hello' } } } as any);
+  it('evalJs 提取 value（单层 { result: <RemoteObject> } 结构）', async () => {
+    vi.spyOn(chrome.debugger, 'sendCommand' as any).mockResolvedValue({ result: { value: 'hello' } } as any);
     const v = await evalJs<string>({ tabId: 1 }, "'hello'");
     expect(v).toBe('hello');
+  });
+  it('evalJs 在页面抛异常时抛错（exceptionDetails 与 result 平级，非嵌套在 result 内）', async () => {
+    vi.spyOn(chrome.debugger, 'sendCommand' as any).mockResolvedValue({
+      result: { type: 'object' },
+      exceptionDetails: { text: '页面执行异常' },
+    } as any);
+    await expect(evalJs({ tabId: 1 }, 'bad')).rejects.toThrow('页面执行异常');
   });
   it('typeText 用 Input.insertText', async () => {
     const spy = vi.spyOn(chrome.debugger, 'sendCommand' as any).mockResolvedValue({} as any);
