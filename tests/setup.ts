@@ -2,6 +2,12 @@ import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+// jsdom 不实现 Element.prototype.scrollIntoView，LogPanel 等自动滚动组件的 useEffect 会调用它。
+// polyfill 为 no-op，保证渲染不抛错。
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = function scrollIntoView() { /* no-op for jsdom */ };
+}
+
 // chrome.storage.local 内存实现（兼容 callback 与 Promise 两种调用风格）
 const memStore = new Map<string, unknown>();
 
