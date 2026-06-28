@@ -19,7 +19,7 @@
  */
 
 import { attach, detach, type Target } from '../lib/cdp/client';
-import { evalJs, waitForLoad, waitForPredicate } from '../lib/cdp/actions';
+import { evalJs, waitForLoad, waitForPredicate, fmtMs } from '../lib/cdp/actions';
 import { runBatch } from '../lib/gsc/flow';
 import { buildGscUrl } from '../lib/gsc/url';
 import { PROBES } from '../lib/gsc/selectors';
@@ -144,6 +144,7 @@ export default defineBackground(() => {
 
     try {
       // 先等 readyState（best-effort，忽略其超时），再以 href+输入框 为权威就绪信号（§1）。
+      const t0 = Date.now();
       await waitForLoad(target).catch(() => undefined);
       const ready = await waitForPredicate(
         target,
@@ -155,8 +156,9 @@ export default defineBackground(() => {
         emit(port, { type: 'GSC_DONE', ok: 0, failed: 0, skipped: 0 });
         return;
       }
+      emit(port, { type: 'GSC_LOG', level: 'info', phase: 'system', message: `页面就绪 ✓ (${fmtMs(Date.now() - t0)})` });
 
-      // 登录态/权限态前置检查（§3）：未登录或无权限则不驱动登录，直接以 0 汇总结束。
+      // 登录态/权限态前置检查（§3）
       const check = await evalJs<{
         isLoginScreen: boolean;
         needsVerify: boolean;
@@ -171,6 +173,8 @@ export default defineBackground(() => {
         emit(port, { type: 'GSC_DONE', ok: 0, failed: 0, skipped: 0 });
         return;
       }
+      emit(port, { type: 'GSC_LOG', level: 'info', phase: 'system', message: '登录态正常' });
+
 
       // 批量提交；stopRequested 作为 shouldStop 传入，GSC_CANCEL 可在下一条 URL 前中止。
       const summary = await runBatch(target, msg.urls, {
@@ -244,7 +248,7 @@ export default defineBackground(() => {
     await attach(target);
 
     try {
-      // 先等 readyState（best-effort），再以 href+输入框 为权威就绪信号（§1）。
+      const t0 = Date.now();
       await waitForLoad(target).catch(() => undefined);
       const ready = await waitForPredicate(
         target,
@@ -256,14 +260,17 @@ export default defineBackground(() => {
         emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: 0 });
         return;
       }
+      emit(port, { type: 'BING_LOG', level: 'info', phase: 'system', message: `页面就绪 ✓ (${fmtMs(Date.now() - t0)})` });
 
-      // 登录态前置检查（§3）：未登录则不驱动登录，直接以 0 汇总结束。
+      // 登录态前置检查（§3）
       const check = await evalJs<{ isLoginScreen: boolean }>(target, BING_LOGIN_CHECK_EXPR);
       if (check.isLoginScreen) {
         emit(port, { type: 'BING_LOG', level: 'error', phase: 'system', message: '未登录 Bing Webmaster，请在浏览器登录后重试' });
         emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: 0 });
         return;
       }
+      emit(port, { type: 'BING_LOG', level: 'info', phase: 'system', message: '登录态正常' });
+
 
       // 批量提交；shouldStop 接闭包 stop 标志，BING_CANCEL 可在下一条 URL 前中止。
       const summary = await bingRunBatch(target, msg.urls, {
