@@ -13,10 +13,9 @@ describe('useSite', () => {
     expect((stored['site:last'] as { domain: string }).domain).toBe('example.com');
   });
   it('挂载时读取上次的 site', async () => {
-    await chrome.storage.local.set({ 'site:last': { domain: 'shop.example.com', projectId: 'p9' } });
+    await chrome.storage.local.set({ 'site:last': { domain: 'shop.example.com' } });
     const { result } = renderHook(() => useSite());
     await act(async () => { /* 等待 useEffect 读取 */ });
     expect(result.current.site.domain).toBe('shop.example.com');
-    expect(result.current.site.projectId).toBe('p9');
   });
 });

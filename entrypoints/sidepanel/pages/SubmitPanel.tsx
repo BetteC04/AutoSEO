@@ -28,7 +28,7 @@ export default function SubmitPanel({ site, onBack }: { site: Site; onBack: () =
 
   return (
     <div style={{ padding: 'var(--space-md)' }}>
-      <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 13, marginBottom: 12, padding: 0 }}>
+      <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 13, marginBottom: 12, padding: 0 }}>
         <IconBack size={14} /> 返回
       </button>
       <h2 style={{ fontSize: 17, marginBottom: 'var(--space-md)' }}>网站提交</h2>

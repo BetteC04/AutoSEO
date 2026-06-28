@@ -48,7 +48,7 @@ export default function ProjectModal({ onClose }: { onClose: () => void }) {
           {projects.map((p) => (
             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 12px', background: 'var(--color-surface-card)', borderRadius: 'var(--radius-md)' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{p.domain}</span>
-              <button onClick={() => remove(p.id).catch((e) => setError((e as Error).message ?? String(e)))} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', fontSize: 12 }}>删除</button>
+              <button type="button" aria-label={`删除 ${p.domain}`} onClick={() => remove(p.id).catch((e) => setError((e as Error).message ?? String(e)))} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', fontSize: 12 }}>删除</button>
             </div>
           ))}
           {projects.length === 0 && <div style={{ color: 'var(--color-muted)', fontSize: 12 }}>还没有项目</div>}

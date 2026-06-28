@@ -1,7 +1,7 @@
 // entrypoints/sidepanel/hooks/useSite.ts
 import { useCallback, useEffect, useState } from 'react';
 
-export interface Site { domain: string; projectId?: string; }
+export interface Site { domain: string; }
 
 const KEY = 'site:last';
 
@@ -17,7 +17,7 @@ export function useSite() {
 
   const setSite = useCallback((s: Site) => {
     setSiteState(s);
-    chrome.storage.local.set({ [KEY]: s });
+    chrome.storage.local.set({ [KEY]: s }).catch(() => { /* 存储写入失败不阻塞 UI */ });
   }, []);
 
   return { site, setSite };

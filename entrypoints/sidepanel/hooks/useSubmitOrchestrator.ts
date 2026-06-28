@@ -10,6 +10,7 @@ export function useSubmitOrchestrator() {
   const [active, setActive] = useState<'gsc' | 'bing' | null>(null);
 
   const run = useCallback(async (platforms: Platforms, domain: string, urls: string[]) => {
+    if (active) return; // 重入 guard：SubmitPanel !busy 按钮禁用为主防护，这里双重保险
     if (platforms.gsc) {
       setActive('gsc');
       try { await gsc.start(domain, urls); } catch { /* 某平台失败不中断后续 */ }
@@ -19,9 +20,9 @@ export function useSubmitOrchestrator() {
       try { await bing.start(domain, urls); } catch { /* 同上 */ }
     }
     setActive(null);
-  }, [gsc, bing]);
+  }, [gsc, bing, active]);
 
-  const cancel = useCallback(() => { gsc.cancel(); bing.cancel(); }, [gsc, bing]);
+  const cancel = useCallback(() => { gsc.cancel(); bing.cancel(); setActive(null); }, [gsc, bing]);
 
   return { gsc, bing, active, run, cancel };
 }
