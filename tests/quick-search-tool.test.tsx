@@ -43,4 +43,9 @@ describe('QuickSearchTool', () => {
     const items2 = (await chrome.storage.local.get('kw-tools:geo')) as Record<string, { code: string }>;
     expect(items2['kw-tools:geo'].code).toBe('OFF');
   });
+
+  it('渲染「仅 Google」提示,明确搜索位置只对 Google 生效', () => {
+    render(<QuickSearchTool keyword="apple" />);
+    expect(screen.getByText(/仅 Google/)).toBeInTheDocument();
+  });
 });
