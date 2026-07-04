@@ -21,7 +21,9 @@ interface LogEntry {
 export function useGscRunner() {
   const portRef = useRef<chrome.runtime.Port | null>(null);
   /** start 返回的 Promise 的 resolve；GSC_DONE 到达时调用并清空。供 Task 8 orchestrator 串行 await。 */
-  const doneRef = useRef<(() => void) | null>(null);
+  const doneRef = useRef<((results: SubmitResult[]) => void) | null>(null);
+  /** 缓存最后一次 GSC_STATE 的 results；GSC_DONE 时用它 resolve（避免 React state 异步导致读到旧值）。 */
+  const latestResults = useRef<SubmitResult[]>([]);
   const [state, setState] = useState<RunnerState>(IDLE);
   const [results, setResults] = useState<SubmitResult[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -38,11 +40,12 @@ export function useGscRunner() {
           currentUrl: e.currentUrl,
         });
         setResults(e.results);
+        latestResults.current = e.results;
       } else if (e.type === 'GSC_LOG') {
         setLogs((prev) => [...prev, { level: e.level, phase: e.phase, message: e.message, ts: Date.now() }]);
       } else if (e.type === 'GSC_DONE') {
         setState(IDLE);
-        doneRef.current?.();
+        doneRef.current?.(latestResults.current);
         doneRef.current = null;
       }
     });
@@ -51,14 +54,15 @@ export function useGscRunner() {
 
   /**
    * 启动一次批量「请求编入索引」。
-   * 返回一个在 background 推送 GSC_DONE 时 resolve 的 Promise（Task 8 orchestrator 串行 await 依赖此行为）。
+   * 返回一个在 background 推送 GSC_DONE 时 resolve 的 Promise，resolve 值为最终 SubmitResult[]（Task 9 orchestrator 落库依赖此行为）。
    */
-  const start = useCallback((domain: string, urls: string[]): Promise<void> => {
+  const start = useCallback((domain: string, urls: string[]): Promise<SubmitResult[]> => {
     setLogs([]);
     setResults([]);
+    latestResults.current = [];
     setState({ running: true, total: urls.length, done: 0 });
     portRef.current?.postMessage({ type: 'GSC_START', domain, urls });
-    return new Promise<void>((resolve) => { doneRef.current = resolve; });
+    return new Promise<SubmitResult[]>((resolve) => { doneRef.current = resolve; });
   }, []);
 
   const cancel = useCallback(() => {
