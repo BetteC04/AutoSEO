@@ -15,6 +15,11 @@ vi.mock('../entrypoints/sidepanel/hooks/useSubmitOrchestrator', () => ({
   }),
 }));
 
+const refresh = vi.fn();
+vi.mock('../entrypoints/sidepanel/hooks/useProgressQuery', () => ({
+  useProgressQuery: () => ({ state: { loading: false }, refresh }),
+}));
+
 import SubmitPanel from '../entrypoints/sidepanel/pages/SubmitPanel';
 
 describe('SubmitPanel', () => {
@@ -48,5 +53,24 @@ describe('SubmitPanel', () => {
     render(<SubmitPanel site={{ domain: 'example.com' }} onBack={onBack} />);
     fireEvent.click(screen.getByText('返回'));
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('默认在提交 tab，不渲染查询刷新按钮', () => {
+    render(<SubmitPanel site={{ domain: 'example.com' }} onBack={() => {}} />);
+    expect(screen.queryByText('刷新进度')).not.toBeInTheDocument();
+  });
+
+  it('切到「查询进度」tab 渲染 ProgressPanel', () => {
+    render(<SubmitPanel site={{ domain: 'example.com' }} onBack={() => {}} />);
+    fireEvent.click(screen.getByText('查询进度'));
+    expect(screen.getByText('刷新进度')).toBeInTheDocument();
+  });
+
+  it('两 tab 共享 sitemapUrl：submit 改值后切 progress 用新值刷新', () => {
+    render(<SubmitPanel site={{ domain: 'example.com' }} onBack={() => {}} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://example.com/sitemap-index.xml' } });
+    fireEvent.click(screen.getByText('查询进度'));
+    fireEvent.click(screen.getByText('刷新进度'));
+    expect(refresh).toHaveBeenCalledWith('https://example.com/sitemap-index.xml');
   });
 });
