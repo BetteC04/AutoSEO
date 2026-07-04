@@ -1,31 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Button from '../components/Button';
-import Textarea from '../components/Textarea';
+import TextInput from '../components/TextInput';
 import LogPanel from '../components/LogPanel';
 import PlatformChip from '../components/PlatformChip';
 import { IconBack, GscMark, BingMark } from '../components/icons';
 import { useSubmitOrchestrator } from '../hooks/useSubmitOrchestrator';
 import { isValidDomain } from '@lib/storage/projects';
+import { normalizeOrigin } from '@lib/seo-files/url';
+import { classifyResult } from '@lib/submit/reasons';
 import type { Site } from '../hooks/useSite';
+
+function defaultSitemapUrl(domain: string): string {
+  try { return `${normalizeOrigin(domain)}/sitemap.xml`; } catch { return ''; }
+}
 
 export default function SubmitPanel({ site, onBack }: { site: Site; onBack: () => void }) {
   const orch = useSubmitOrchestrator();
-  const [text, setText] = useState('');
+  const [sitemapUrl, setSitemapUrl] = useState(() => defaultSitemapUrl(site.domain));
   const [gsc, setGsc] = useState(true);
   const [bing, setBing] = useState(true);
   const [error, setError] = useState('');
+  const dirtyRef = useRef(false);
 
-  const urls = text.split('\n').map((s) => s.trim()).filter(Boolean);
-  const busy = orch.gsc.state.running || orch.bing.state.running;
-  const ready = urls.length > 0 && (gsc || bing) && !busy;
+  // domain 变化时重置默认值（除非用户手改过）
+  useEffect(() => {
+    if (!dirtyRef.current) setSitemapUrl(defaultSitemapUrl(site.domain));
+  }, [site.domain]);
+
+  const busy = orch.gsc.state.running || orch.bing.state.running || orch.active === 'sitemap';
+  const ready = (gsc || bing) && !busy;
 
   function submit() {
     if (!isValidDomain(site.domain)) { setError('请先选择或填写有效网站（如 example.com）'); return; }
+    if (!sitemapUrl.trim()) { setError('请填写站点地图 URL（如 https://example.com/sitemap.xml）'); return; }
     setError('');
-    // T10 改签名：run(platforms, domain, sitemapUrl)；完整 sitemap 输入 UI 见 T11。
-    const sitemapUrl = `https://${site.domain.trim()}/sitemap.xml`;
-    void orch.run({ gsc, bing }, site.domain.trim(), sitemapUrl);
+    void orch.run({ gsc, bing }, site.domain.trim(), sitemapUrl.trim());
   }
+
+  const successes = orch.report.filter((r) => classifyResult(r) === 'ok');
+  const failures = orch.report.filter((r) => classifyResult(r) === 'failed');
+  const skips = orch.report.filter((r) => classifyResult(r) === 'skipped');
 
   return (
     <div style={{ padding: 'var(--space-md)' }}>
@@ -40,8 +54,8 @@ export default function SubmitPanel({ site, onBack }: { site: Site; onBack: () =
         <PlatformChip label="Bing" icon={<BingMark />} checked={bing} onToggle={() => setBing((v) => !v)} />
       </div>
 
-      <label style={{ display: 'block', fontSize: 12, color: 'var(--color-muted)', marginBottom: 4 }}>链接（每行一条）</label>
-      <Textarea rows={6} value={text} placeholder={'https://example.com/es/\nhttps://example.com/de/'} onChange={(e) => setText(e.target.value)} />
+      <label style={{ display: 'block', fontSize: 12, color: 'var(--color-muted)', marginBottom: 4 }}>站点地图（sitemap.xml）</label>
+      <TextInput value={sitemapUrl} placeholder="https://example.com/sitemap.xml" onChange={(e) => { dirtyRef.current = true; setSitemapUrl(e.target.value); }} />
 
       {error && <div style={{ color: 'var(--color-error)', fontSize: 12, marginTop: 6 }}>{error}</div>}
 
@@ -51,6 +65,12 @@ export default function SubmitPanel({ site, onBack }: { site: Site; onBack: () =
       </div>
 
       <div style={{ marginTop: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {orch.logs.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 4 }}>▍系统</div>
+            <LogPanel logs={orch.logs} />
+          </div>
+        )}
         {(gsc || orch.gsc.logs.length > 0) && (
           <div>
             <div style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 4 }}>▍GSC{orch.gsc.state.total > 0 ? `  ${orch.gsc.state.done}/${orch.gsc.state.total}` : ''}</div>
@@ -64,6 +84,26 @@ export default function SubmitPanel({ site, onBack }: { site: Site; onBack: () =
           </div>
         )}
       </div>
+
+      {orch.report.length > 0 && (
+        <div style={{ marginTop: 'var(--space-md)', fontSize: 12, lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>
+            本批 {orch.report.length} 个 · 成功 {successes.length} · 失败 {failures.length} · 跳过 {skips.length}
+          </div>
+          {failures.length > 0 && (
+            <div style={{ color: 'var(--color-error)', marginBottom: 6 }}>
+              <div style={{ fontWeight: 600 }}>失败：</div>
+              {failures.map((r) => (<div key={`${r.platform}-${r.url}`}>· {r.url}（{r.platform}{r.reason ? `：${r.reason}` : ''}）</div>))}
+            </div>
+          )}
+          {successes.length > 0 && (
+            <div style={{ color: 'var(--color-muted)' }}>
+              <div style={{ fontWeight: 600, color: 'var(--color-ink)' }}>成功：</div>
+              {successes.map((r) => (<div key={`${r.platform}-${r.url}`}>· {r.url}（{r.platform}）</div>))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

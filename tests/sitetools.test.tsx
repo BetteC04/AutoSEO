@@ -5,6 +5,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 vi.mock('../entrypoints/sidepanel/hooks/useSubmitOrchestrator', () => ({
   useSubmitOrchestrator: () => ({
     run: vi.fn(), cancel: vi.fn(), active: null,
+    report: [], logs: [], clearReport: vi.fn(),
     gsc: { state: { running: false, total: 0, done: 0 }, logs: [], results: [] },
     bing: { state: { running: false, total: 0, done: 0 }, logs: [], results: [] },
   }),
