@@ -5,6 +5,7 @@ import { fetchSitemapViaBackground, type SitemapFetched } from '@lib/messaging/s
 import { mergeDiscovered } from '@lib/storage/discovered';
 import { getSubmissions, appendSubmissions, type Platform } from '@lib/storage/submissions';
 import { pickRandom } from '@lib/submit/pick';
+import { partitionLowValue } from '@lib/submit/filter';
 
 export interface Platforms { gsc: boolean; bing: boolean; }
 
@@ -51,16 +52,22 @@ export function useSubmitOrchestrator() {
       catch (e) { pushLog('error', 'system', `sitemap 抓取失败: ${(e as Error).message}`); return; }
       pushLog('info', 'system', `发现 ${fetched.urls.length} 条链接（深度 ${fetched.stats.indexDepth}${fetched.stats.truncated ? '，已截断' : ''}）`);
 
-      // ② 增量合并入库
+      // ② 增量合并入库（全量，含低价值链接 —— 库仍保全量）
       const discovered = await mergeDiscovered(domain, sitemapUrl, fetched.urls);
 
-      // ③ 候选池：对所有勾选平台都未 ok 的 URL（批量 ok-set，避免逐条查）
+      // ②.5 低价值过滤：账号/法务/用户中心类不进候选池（discovered 库仍保全量）
+      const { kept, dropped } = partitionLowValue(discovered.urls);
+      if (dropped.length > 0) {
+        pushLog('info', 'system', `已过滤 ${dropped.length} 条低价值链接（登录/注册/隐私/条款/账号等）`);
+      }
+
+      // ③ 候选池：kept 中对所有勾选平台都未 ok 的 URL（批量 ok-set，避免逐条查）
       const selected: Platform[] = [];
       if (platforms.gsc) selected.push('gsc');
       if (platforms.bing) selected.push('bing');
       const subs = await getSubmissions(domain);
       const okSet = new Set(subs.filter((r) => r.status === 'ok').map((r) => `${r.platform}|${r.url}`));
-      const pool = discovered.urls.filter((u) => selected.every((p) => !okSet.has(`${p}|${u}`)));
+      const pool = kept.filter((u) => selected.every((p) => !okSet.has(`${p}|${u}`)));
 
       // ④ 随机选 BATCH_SIZE
       const picked = pickRandom(pool, BATCH_SIZE);

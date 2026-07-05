@@ -75,4 +75,43 @@ describe('useSubmitOrchestrator（sitemap 流程）', () => {
     await act(async () => { await result.current.run({ gsc: true, bing: false }, 'example.com', SITEMAP, { fetchSitemap }); });
     expect(gscStart).not.toHaveBeenCalled();
   });
+
+  it('低价值链接被剔出候选池且系统日志回显数量', async () => {
+    fetchSitemap.mockResolvedValue({
+      urls: [
+        'https://example.com/login',
+        'https://example.com/privacy-policy',
+        'https://example.com/blog/post-1',
+      ],
+      stats: { indexDepth: 0, truncated: false },
+    });
+    const { result } = renderHook(() => useSubmitOrchestrator());
+    await act(async () => { await result.current.run({ gsc: true, bing: false }, 'example.com', SITEMAP, { fetchSitemap }); });
+    // 候选池只剩 blog/post-1
+    expect(gscStart).toHaveBeenCalledWith('example.com', ['https://example.com/blog/post-1']);
+    // 系统日志含「已过滤 2 条」
+    expect(result.current.logs.some((l) => /已过滤 2 条低价值链接/.test(l.message))).toBe(true);
+  });
+
+  it('mergeDiscovered 收到全量（低价值项未被提前丢弃）', async () => {
+    fetchSitemap.mockResolvedValue({
+      urls: ['https://example.com/login', 'https://example.com/blog/post-1'],
+      stats: { indexDepth: 0, truncated: false },
+    });
+    const { result } = renderHook(() => useSubmitOrchestrator());
+    await act(async () => { await result.current.run({ gsc: true, bing: false }, 'example.com', SITEMAP, { fetchSitemap }); });
+    const { getDiscovered } = await import('../lib/storage/discovered');
+    const d = await getDiscovered('example.com');
+    expect(d?.urls).toEqual(['https://example.com/login', 'https://example.com/blog/post-1']);
+  });
+
+  it('dropped 为 0 时不输出过滤日志', async () => {
+    fetchSitemap.mockResolvedValue({
+      urls: ['https://example.com/a', 'https://example.com/b'],
+      stats: { indexDepth: 0, truncated: false },
+    });
+    const { result } = renderHook(() => useSubmitOrchestrator());
+    await act(async () => { await result.current.run({ gsc: true, bing: false }, 'example.com', SITEMAP, { fetchSitemap }); });
+    expect(result.current.logs.some((l) => /已过滤/.test(l.message))).toBe(false);
+  });
 });
