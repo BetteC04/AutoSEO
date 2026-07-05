@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGoogleSearchUrl, buildBingSearchUrl } from '../lib/quicksearch/url';
+import { buildGoogleSearchUrl, buildBingSearchUrl, buildYandexSearchUrl } from '../lib/quicksearch/url';
 
 describe('quicksearch url', () => {
   it('Google 结果页', () => {
@@ -14,5 +14,9 @@ describe('quicksearch url', () => {
   it('空关键词抛错', () => {
     expect(() => buildGoogleSearchUrl('')).toThrow();
     expect(() => buildBingSearchUrl('   ')).toThrow();
+    expect(() => buildYandexSearchUrl('')).toThrow();
+  });
+  it('Yandex 结果页', () => {
+    expect(buildYandexSearchUrl('apple')).toBe('https://yandex.com/search/?text=apple');
   });
 });

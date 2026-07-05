@@ -11,3 +11,10 @@ export function buildBingSearchUrl(keyword: string): string {
   if (!kw) throw new Error('keyword required');
   return `https://cn.bing.com/search?q=${encodeURIComponent(kw)}`;
 }
+
+/** Yandex 结果页。 */
+export function buildYandexSearchUrl(keyword: string): string {
+  const kw = keyword.trim();
+  if (!kw) throw new Error('keyword required');
+  return `https://yandex.com/search/?text=${encodeURIComponent(kw)}`;
+}

@@ -18,8 +18,9 @@ describe('KeywordTools', () => {
     // Google Trends
     expect(screen.getByText('Google Trends')).toBeInTheDocument();
     // 快捷搜索
-    expect(screen.getByText('快捷搜索')).toBeInTheDocument();
+    expect(screen.getByText('搜索引擎查询')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '用 Google 搜' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '用 Bing 搜' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '用 Yandex 搜' })).toBeInTheDocument();
   });
 });
