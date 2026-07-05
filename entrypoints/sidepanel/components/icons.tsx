@@ -87,3 +87,43 @@ export function IconChevron({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+/** 快捷工具分类 — 闪电(表「快」)。 */
+export function IconBolt({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 2 L4 14 H11 L10 22 L20 10 H13 Z" />
+    </svg>
+  );
+}
+
+/** 站长后台分类 — 地球(表「全网/站点」)。 */
+export function IconGlobe({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.5 4 5.6 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.6-4-9s1.5-6.5 4-9z" />
+    </svg>
+  );
+}
+
+/** 网站分析分类 — 柱状图。 */
+export function IconChart({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 20V13" /><path d="M10 20V5" /><path d="M16 20v-9" />
+      <path d="M3 20h18" />
+    </svg>
+  );
+}
+
+/** 自动化工具分类 — 循环箭头(表「自动/批量」)。 */
+export function IconRefresh({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" />
+    </svg>
+  );
+}

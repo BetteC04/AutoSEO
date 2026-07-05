@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { Logo, GscMark, BingMark, IconSubmit, IconRobots, IconSitemap, IconSettings, IconBack, IconClose, IconChevron } from '../entrypoints/sidepanel/components/icons';
+import { Logo, GscMark, BingMark, IconSubmit, IconRobots, IconSitemap, IconSettings, IconBack, IconClose, IconChevron, IconBolt, IconGlobe, IconChart, IconRefresh } from '../entrypoints/sidepanel/components/icons';
 
 describe('icons', () => {
-  const all = { Logo, GscMark, BingMark, IconSubmit, IconRobots, IconSitemap, IconSettings, IconBack, IconClose, IconChevron };
+  const all = { Logo, GscMark, BingMark, IconSubmit, IconRobots, IconSitemap, IconSettings, IconBack, IconClose, IconChevron, IconBolt, IconGlobe, IconChart, IconRefresh };
   for (const [name, Comp] of Object.entries(all)) {
     it(`${name} 渲染一个 svg`, () => {
       const { container } = render(<Comp />);

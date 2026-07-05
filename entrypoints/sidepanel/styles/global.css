@@ -79,17 +79,17 @@ button:disabled { cursor: not-allowed; }
   border-color: var(--color-hairline);
 }
 
-/* 工具入口卡片 */
+/* 工具入口瓦片(ToolPanel 内网格单元) */
 .tool-card {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   text-align: left;
   background: var(--color-surface-card);
   border: none;
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
   cursor: pointer;
   transition: background .12s ease;
 }
@@ -97,8 +97,8 @@ button:disabled { cursor: not-allowed; }
 .tool-card.is-disabled { cursor: not-allowed; }
 .tool-card.is-disabled:hover { background: var(--color-surface-card); }
 .tool-card__icon { display: inline-flex; color: var(--color-primary); line-height: 0; }
-.tool-card__title { display: block; font-family: var(--font-serif); font-size: 16px; color: var(--color-ink); }
-.tool-card__subtitle { display: block; font-size: 12px; color: var(--color-muted); margin-top: 2px; }
+.tool-card__title { display: block; font-size: 13px; font-weight: 500; color: var(--color-ink); }
+.tool-card__subtitle { display: block; font-size: 11px; color: var(--color-muted); margin-top: 1px; }
 
 /* 平台开关 chip */
 .platform-chip {
