@@ -17,7 +17,6 @@ describe('KeywordTools', () => {
     expect(screen.getByText('Keyword Difficulty Checker')).toBeInTheDocument();
     // Google Trends
     expect(screen.getByText('Google Trends')).toBeInTheDocument();
-    expect(screen.getByText('谷歌趋势')).toBeInTheDocument();
     // 快捷搜索
     expect(screen.getByText('快捷搜索')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '用 Google 搜' })).toBeInTheDocument();
