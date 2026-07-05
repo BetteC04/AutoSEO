@@ -53,8 +53,7 @@ export default function SiteTools() {
           <div style={gridStyle}>
             <ToolCard
               icon={<IconSubmit />}
-              title="网站提交"
-              subtitle="GSC · Bing"
+              title="网站提交（GSC · Bing）"
               onClick={() => setView('submit')}
               style={{ gridColumn: '1 / -1' }}
             />

@@ -19,7 +19,7 @@ const flush = () => act(async () => {});
 describe('SiteTools', () => {
   it('点击「网站提交」进入提交子面板（出现返回）', async () => {
     render(<SiteTools />);
-    fireEvent.click(screen.getByText('网站提交'));
+    fireEvent.click(screen.getByText(/网站提交/));
     expect(await screen.findByText('返回')).toBeInTheDocument();
   });
   it('选择有效网站后，点击 robots.txt 打开新标签', async () => {
@@ -48,8 +48,8 @@ describe('SiteTools', () => {
     await flush();
     expect(screen.getByText('Backlink Checker')).toBeInTheDocument();
     expect(screen.getByText('Website Authority Checker')).toBeInTheDocument();
-    expect(screen.getByText('Google Search Console')).toBeInTheDocument();
-    expect(screen.getByText('Bing Webmaster Tools')).toBeInTheDocument();
+    expect(screen.getByText('GSC')).toBeInTheDocument();
+    expect(screen.getByText('Bing')).toBeInTheDocument();
     expect(screen.getByText('Google Analytics')).toBeInTheDocument();
     expect(screen.getByText('Microsoft Clarity')).toBeInTheDocument();
     expect(screen.getByText('PageSpeed Insights')).toBeInTheDocument();
@@ -66,13 +66,13 @@ describe('SiteTools', () => {
     expect(url).toBe('https://ahrefs.com/backlink-checker/?input=vercel.com&mode=subdomains');
     spy.mockRestore();
   });
-  it('选网站后点 Google Search Console 打开直接链接（无查询参数）', async () => {
+  it('选网站后点 GSC 打开直接链接（无查询参数）', async () => {
     const spy = vi.spyOn(chrome.tabs, 'create').mockResolvedValue({ id: 1 } as never);
     render(<SiteTools />);
     await flush();
     const input = screen.getByPlaceholderText('example.com') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'example.com' } });
-    fireEvent.click(screen.getByText('Google Search Console'));
+    fireEvent.click(screen.getByText('GSC'));
     expect(spy).toHaveBeenCalled();
     expect(spy.mock.calls[0][0].url).toBe('https://search.google.com/search-console');
     spy.mockRestore();
@@ -83,13 +83,13 @@ describe('SiteTools', () => {
     const card = screen.getByText('PageSpeed Insights').closest('[role="button"], .tool-card');
     expect(card?.getAttribute('aria-disabled')).toBe('true');
   });
-  it('选网站后点 Bing Webmaster Tools 打开直接链接', async () => {
+  it('选网站后点 Bing 打开直接链接', async () => {
     const spy = vi.spyOn(chrome.tabs, 'create').mockResolvedValue({ id: 1 } as never);
     render(<SiteTools />);
     await flush();
     const input = screen.getByPlaceholderText('example.com') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'example.com' } });
-    fireEvent.click(screen.getByText('Bing Webmaster Tools'));
+    fireEvent.click(screen.getByText('Bing'));
     expect(spy).toHaveBeenCalled();
     expect(spy.mock.calls[0][0].url).toBe('https://www.bing.com/webmasters');
     spy.mockRestore();
