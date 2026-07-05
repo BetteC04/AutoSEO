@@ -49,4 +49,11 @@ describe('RunningOverlay', () => {
     render(<RunningOverlay orch={mkOrch({ active: 'sitemap' })} gscSelected bingSelected onCancel={() => {}} />);
     expect(screen.getByText(/提交中 抓取 sitemap/)).toBeInTheDocument();
   });
+
+  it('active=sitemap 抓取中进度条满条等待占位', () => {
+    const { container } = render(<RunningOverlay orch={mkOrch({ active: 'sitemap' })} gscSelected bingSelected onCancel={() => {}} />);
+    const fill = container.querySelector('[data-testid="progress-fill"]') as HTMLElement;
+    expect(fill.style.width).toBe('100%');
+    expect(fill.style.opacity).toBe('0.35');
+  });
 });

@@ -21,6 +21,7 @@ export default function RunningOverlay({ orch, gscSelected, bingSelected, onCanc
   const done = activeRunner?.state.done ?? 0;
   const total = activeRunner?.state.total ?? 0;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const waiting = total === 0;
 
   const steps: Step[] = [];
   steps.push({ label: '抓取', status: active === 'sitemap' ? 'current' : 'done' });
@@ -49,7 +50,7 @@ export default function RunningOverlay({ orch, gscSelected, bingSelected, onCanc
       </div>
 
       <div style={{ height: 6, background: 'var(--color-canvas)', borderRadius: 3, overflow: 'hidden', marginBottom: 'var(--space-xs)' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--color-primary)', transition: 'width 0.2s' }} />
+        <div data-testid="progress-fill" style={{ width: waiting ? '100%' : `${pct}%`, height: '100%', background: 'var(--color-primary)', opacity: waiting ? 0.35 : 1, transition: 'width 0.2s' }} />
       </div>
 
       <div style={{ display: 'flex', gap: 6, fontSize: 12, marginBottom: 'var(--space-sm)' }}>
