@@ -59,6 +59,9 @@ export default function SubmitPanel({ site, onBack }: { site: Site; onBack: () =
 
       <label style={{ display: 'block', fontSize: 12, color: 'var(--color-muted)', marginBottom: 4 }}>站点地图（sitemap.xml）</label>
       <TextInput value={sitemapUrl} placeholder="https://example.com/sitemap.xml" onChange={(e) => { dirtyRef.current = true; setSitemapUrl(e.target.value); }} />
+      <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 4 }}>
+        将自动过滤登录 / 注册 / 隐私 / 条款 / 账号等低价值链接，不参与提交。
+      </div>
 
       {tab === 'submit' && (
         <>

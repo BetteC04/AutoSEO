@@ -73,4 +73,9 @@ describe('SubmitPanel', () => {
     fireEvent.click(screen.getByText('刷新进度'));
     expect(refresh).toHaveBeenCalledWith('https://example.com/sitemap-index.xml');
   });
+
+  it('渲染低价值过滤常驻说明', () => {
+    render(<SubmitPanel site={{ domain: 'example.com' }} onBack={() => {}} />);
+    expect(screen.getByText(/将自动过滤登录.*低价值链接/)).toBeInTheDocument();
+  });
 });
