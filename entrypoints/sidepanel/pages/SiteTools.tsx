@@ -7,7 +7,7 @@ import SubmitPanel from './SubmitPanel';
 import { IconSubmit, IconRobots, IconSitemap, IconBolt, IconGlobe, IconChart, IconRefresh } from '../components/icons';
 import { useSite } from '../hooks/useSite';
 import { useProjects } from '../hooks/useProjects';
-import { isValidDomain } from '@lib/storage/projects';
+import { isValidDomain, normalizeDomain } from '@lib/storage/projects';
 import { SITE_TOOLS, SITE_TOOL_GROUPS, type SiteToolCategory } from '@lib/site-tools/tools';
 
 // 分类 → header icon(与关键词面板每个 ToolPanel 的「icon + 标题」一致)
@@ -29,7 +29,13 @@ export default function SiteTools() {
   const [modalOpen, setModalOpen] = useState(false);
 
   const domains = projects.map((p) => p.domain);
-  const hasSite = isValidDomain(site.domain);
+  const hasSite = isValidDomain(normalizeDomain(site.domain));
+  const showInvalid = !!site.domain && !hasSite; // 输入了但清洗后仍无效
+
+  function handleSiteBlur() {
+    const n = normalizeDomain(site.domain);
+    if (n !== site.domain) setSite({ domain: n });
+  }
 
   function openTool(buildUrl: (domain: string) => string) {
     if (!hasSite) return;
@@ -45,7 +51,7 @@ export default function SiteTools() {
   return (
     <div style={{ padding: 'var(--space-md)' }}>
       <label style={{ display: 'block', fontSize: 12, color: 'var(--color-muted)', marginBottom: 4 }}>网站</label>
-      <Combobox value={site.domain} options={domains} placeholder="example.com" onChange={(v) => setSite({ domain: v })} onManage={() => setModalOpen(true)} />
+      <Combobox value={site.domain} options={domains} placeholder="example.com" onChange={(v) => setSite({ domain: v })} onBlur={handleSiteBlur} onManage={() => setModalOpen(true)} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', marginTop: 'var(--space-md)' }}>
         {/* 自动化工具:网站提交进入 SubmitPanel(置顶) */}
@@ -79,7 +85,11 @@ export default function SiteTools() {
         ))}
       </div>
 
-      {!hasSite && <div style={{ color: 'var(--color-muted)', fontSize: 12, marginTop: 'var(--space-sm)' }}>请先选择或填写网站以使用工具</div>}
+      {!hasSite && (
+        <div style={{ color: showInvalid ? 'var(--color-error)' : 'var(--color-muted)', fontSize: 12, marginTop: 'var(--space-sm)' }}>
+          {showInvalid ? '请输入有效域名，如 example.com' : '请先选择或填写网站以使用工具'}
+        </div>
+      )}
 
       {modalOpen && <ProjectModal onClose={() => setModalOpen(false)} />}
     </div>

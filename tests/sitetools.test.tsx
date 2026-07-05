@@ -94,4 +94,30 @@ describe('SiteTools', () => {
     expect(spy.mock.calls[0][0].url).toBe('https://www.bing.com/webmasters');
     spy.mockRestore();
   });
+  it('脏域名 change 后即启用按钮（hasSite 前置 normalize），失焦后清洗回填', async () => {
+    const createSpy = vi.spyOn(chrome.tabs, 'create').mockResolvedValue({ id: 1 } as never);
+    render(<SiteTools />);
+    await flush();
+    const input = screen.getByPlaceholderText('example.com') as HTMLInputElement;
+    // 输入脏值（未失焦）
+    fireEvent.change(input, { target: { value: 'https://example.com/path' } });
+    // change 后即启用：hasSite = isValidDomain(normalizeDomain(...))
+    const robots = screen.getByText('robots.txt').closest('[role="button"], .tool-card');
+    expect(robots?.getAttribute('aria-disabled')).not.toBe('true');
+    // 失焦后回填清洗值
+    fireEvent.blur(input);
+    expect((screen.getByPlaceholderText('example.com') as HTMLInputElement).value).toBe('example.com');
+    // 点击使用清洗后的域名
+    fireEvent.click(screen.getByText('robots.txt'));
+    expect(createSpy.mock.calls[0][0].url).toBe('https://example.com/robots.txt');
+    createSpy.mockRestore();
+  });
+  it('无效输入显示红字提示', async () => {
+    render(<SiteTools />);
+    await flush();
+    const input = screen.getByPlaceholderText('example.com') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'notadomain' } });
+    await flush();
+    expect(screen.getByText('请输入有效域名，如 example.com')).toBeInTheDocument();
+  });
 });

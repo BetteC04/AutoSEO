@@ -26,4 +26,11 @@ describe('Combobox', () => {
     fireEvent.click(screen.getByLabelText('项目管理'));
     expect(onManage).toHaveBeenCalledOnce();
   });
+  it('失焦触发 onBlur', () => {
+    const onBlur = vi.fn();
+    const { container } = render(<Combobox value="example.com" options={[]} onChange={() => {}} onBlur={onBlur} />);
+    const input = container.querySelector('input') as HTMLInputElement;
+    fireEvent.blur(input);
+    expect(onBlur).toHaveBeenCalledOnce();
+  });
 });

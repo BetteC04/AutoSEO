@@ -6,10 +6,11 @@ export interface ComboboxProps {
   options: string[];
   onChange: (v: string) => void;
   onManage?: () => void;
+  onBlur?: () => void;
   placeholder?: string;
 }
 
-export default function Combobox({ value, options, onChange, onManage, placeholder }: ComboboxProps) {
+export default function Combobox({ value, options, onChange, onManage, onBlur, placeholder }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   // 内部 query 状态用于过滤建议；外部受控 value 仍用于回填输入框。
   // 这样即便父组件暂时未回写 value，输入当下的文本也能立即过滤下拉项。
@@ -29,7 +30,7 @@ export default function Combobox({ value, options, onChange, onManage, placehold
           placeholder={placeholder}
           onChange={(e) => { onChange(e.target.value); setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onBlur={() => { onBlur?.(); setTimeout(() => setOpen(false), 120); }}
           style={{
             width: '100%', height: 32, padding: '0 10px',
             background: 'var(--color-canvas)', color: 'var(--color-ink)',
