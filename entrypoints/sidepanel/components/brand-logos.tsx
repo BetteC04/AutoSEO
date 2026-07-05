@@ -1,7 +1,9 @@
-import ahrefsLogoUrl from '../assets/logos/ahrefs.png';
+import ahrefsLogoUrl from '../assets/logos/keyword-difficulty-checker.svg';
 import googleTrendsLogoUrl from '../assets/logos/google-trends.png';
 import googleLogoUrl from '../assets/logos/google.png';
 import bingLogoUrl from '../assets/logos/bing.png';
+import quickSearchLogoUrl from '../assets/logos/quick-search.png';
+import yandexLogoUrl from '../assets/logos/yandex.png';
 
 interface LogoProps { size?: number; }
 
@@ -21,7 +23,7 @@ export function BingLogo({ size = 16 }: LogoProps) {
   return <img src={bingLogoUrl} width={size} height={size} alt="" aria-hidden="true" style={logoStyle} />;
 }
 
-/** Ahrefs — 橙色 a。 */
+/** Ahrefs 关键词难度。 */
 export function AhrefsLogo({ size = 16 }: LogoProps) {
   return <img src={ahrefsLogoUrl} width={size} height={size} alt="" aria-hidden="true" style={logoStyle} />;
 }
@@ -29,4 +31,14 @@ export function AhrefsLogo({ size = 16 }: LogoProps) {
 /** Google Trends — 四色趋势线。 */
 export function GoogleTrendsLogo({ size = 16 }: LogoProps) {
   return <img src={googleTrendsLogoUrl} width={size} height={size} alt="" aria-hidden="true" style={logoStyle} />;
+}
+
+/** 快捷搜索 header logo(搜索引擎聚合)。 */
+export function QuickSearchLogo({ size = 16 }: LogoProps) {
+  return <img src={quickSearchLogoUrl} width={size} height={size} alt="" aria-hidden="true" style={logoStyle} />;
+}
+
+/** Yandex。 */
+export function YandexLogo({ size = 16 }: LogoProps) {
+  return <img src={yandexLogoUrl} width={size} height={size} alt="" aria-hidden="true" style={logoStyle} />;
 }

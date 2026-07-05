@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { GoogleLogo, BingLogo, AhrefsLogo, GoogleTrendsLogo } from '../entrypoints/sidepanel/components/brand-logos';
+import { GoogleLogo, BingLogo, AhrefsLogo, GoogleTrendsLogo, QuickSearchLogo, YandexLogo } from '../entrypoints/sidepanel/components/brand-logos';
 
 describe('brand-logos', () => {
   const cases = [
@@ -8,6 +8,8 @@ describe('brand-logos', () => {
     ['BingLogo', BingLogo],
     ['AhrefsLogo', AhrefsLogo],
     ['GoogleTrendsLogo', GoogleTrendsLogo],
+    ['QuickSearchLogo', QuickSearchLogo],
+    ['YandexLogo', YandexLogo],
   ] as const;
 
   it.each(cases)('%s 渲染为 <img>,默认 size=16 且 src 非空', (_name, Comp) => {
