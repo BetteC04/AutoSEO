@@ -23,4 +23,18 @@ describe('ProjectModal', () => {
     await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }); });
     expect(onClose).toHaveBeenCalledOnce();
   });
+  it('脏域名失焦后清洗回填', async () => {
+    render(<ProjectModal onClose={() => {}} />);
+    const input = screen.getByPlaceholderText('example.com') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'https://example.com/path' } });
+    fireEvent.blur(input);
+    expect(input.value).toBe('example.com');
+  });
+  it('无效输入显示提示且添加按钮禁用', async () => {
+    render(<ProjectModal onClose={() => {}} />);
+    const input = screen.getByPlaceholderText('example.com') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'notadomain' } });
+    expect(screen.getByText('请输入有效域名，如 example.com')).toBeInTheDocument();
+    expect(screen.getByText('添加')).toBeDisabled();
+  });
 });

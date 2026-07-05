@@ -3,12 +3,19 @@ import Button from './Button';
 import TextInput from './TextInput';
 import { IconClose } from './icons';
 import { useProjects } from '../hooks/useProjects';
-import { isValidDomain } from '@lib/storage/projects';
+import { isValidDomain, normalizeDomain } from '@lib/storage/projects';
 
 export default function ProjectModal({ onClose }: { onClose: () => void }) {
   const { projects, add, remove } = useProjects();
   const [domain, setDomain] = useState('');
   const [error, setError] = useState('');
+
+  const valid = isValidDomain(normalizeDomain(domain));
+
+  function handleBlur() {
+    const n = normalizeDomain(domain);
+    if (n !== domain) setDomain(n);
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -17,7 +24,7 @@ export default function ProjectModal({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   async function submit() {
-    try { await add(domain); setDomain(''); setError(''); }
+    try { await add(normalizeDomain(domain)); setDomain(''); setError(''); }
     catch (e) { setError((e as Error).message); }
   }
 
@@ -38,10 +45,11 @@ export default function ProjectModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <TextInput value={domain} placeholder="example.com" onChange={(e) => setDomain(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && isValidDomain(domain)) submit(); }} />
-          <Button onClick={submit} disabled={!isValidDomain(domain)}>添加</Button>
+          <TextInput value={domain} placeholder="example.com" onChange={(e) => setDomain(e.target.value)} onBlur={handleBlur} onKeyDown={(e) => { if (e.key === 'Enter' && valid) submit(); }} />
+          <Button onClick={submit} disabled={!valid}>添加</Button>
         </div>
         {error && <div style={{ color: 'var(--color-error)', fontSize: 12, marginBottom: 6 }}>{error}</div>}
+        {!error && !!domain && !valid && <div style={{ color: 'var(--color-error)', fontSize: 12, marginBottom: 6 }}>请输入有效域名，如 example.com</div>}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {projects.map((p) => (
