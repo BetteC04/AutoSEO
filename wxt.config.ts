@@ -7,8 +7,8 @@ export default defineConfig({
   manifest: {
     name: 'QuickSEO',
     description: 'SEO 快捷工具集合：GSC/Bing 批量提交 + Ahrefs KD 查询',
-    permissions: ['debugger', 'tabs', 'sidePanel', 'storage', 'declarativeNetRequestWithHostAccess', 'cookies'],
-    host_permissions: ['https://search.google.com/*', 'https://www.bing.com/*', 'https://ahrefs.com/*', '<all_urls>'],
+    permissions: ['tabs', 'sidePanel', 'storage', 'declarativeNetRequestWithHostAccess', 'cookies'],
+    host_permissions: ['https://www.bing.com/*', 'https://ahrefs.com/*', '<all_urls>'],
     action: { default_title: 'QuickSEO' },
     side_panel: { default_path: 'sidepanel/index.html' },
   },

@@ -1,5 +1,4 @@
 export interface Settings {
-  accountIndex: number;
   indexnowKey?: string;
   /** Google Indexing API 服务账号 JSON 整段文本（手动粘贴）。 */
   gscCredentials?: string;
@@ -7,7 +6,7 @@ export interface Settings {
   gscToken?: { accessToken: string; expiresAt: number };
 }
 const KEY = 'settings';
-const DEFAULT: Settings = { accountIndex: 0 };
+const DEFAULT: Settings = {};
 
 /** IndexNow 协议密钥格式：8-128 字符，仅 a-zA-Z0-9-。 */
 const INDEXNOW_KEY_PATTERN = /^[a-zA-Z0-9-]{8,128}$/;

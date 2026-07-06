@@ -6,7 +6,7 @@
  * 采用**反向枚举**：reason 命中 SKIP_REASONS → 跳过；其余 skipped 兜底归失败，
  * 这样能覆盖各平台动态 reason，无需穷举失败集合。
  *
- * reason 文案须与 lib/gsc/flow.ts（GSC CDP）/ lib/indexnow/submit.ts（IndexNow API）产出一致。
+ * reason 文案须与 lib/gsc/submit.ts（GSC Indexing API）/ lib/indexnow/submit.ts（IndexNow API）产出一致。
  * 注：IndexNow 失败 reason（密钥无效/网络错误/频率限制/…）刻意不列入 SKIP_REASONS，
  * 归 failed 以在报告中醒目提示用户干预（重试逻辑不受影响：isSubmittedOk 只看 ok）。
  */
