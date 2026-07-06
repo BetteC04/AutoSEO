@@ -27,6 +27,14 @@ describe('submitUrls', () => {
     expect(r.reason).toBeUndefined();
   });
 
+  it('202 → ok:true（IndexNow 异步接受，Bing 端点常见）', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 202 } as Response);
+    const r = await submitUrls('k', 'h', ['https://h/x']);
+    expect(r.ok).toBe(true);
+    expect(r.status).toBe(202);
+    expect(r.reason).toBeUndefined();
+  });
+
   it('403 → ok:false + 密钥无效原因', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 403 } as Response);
     const r = await submitUrls('k', 'h', ['https://h/x']);

@@ -25,7 +25,8 @@ export async function submitUrls(key: string, host: string, urls: string[]): Pro
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ host, key, urlList: urls }),
   });
-  if (res.status === 200) return { ok: true, status: 200 };
+  // IndexNow 协议：200 已立即处理、202 已接收稍后处理，均为成功（Bing 端点常返回 202）。
+  if (res.status === 200 || res.status === 202) return { ok: true, status: res.status };
   return { ok: false, status: res.status, reason: reasonFor(res.status) };
 }
 
