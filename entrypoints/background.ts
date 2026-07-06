@@ -23,12 +23,10 @@ import { evalJs, waitForLoad, waitForPredicate, fmtMs } from '../lib/cdp/actions
 import { runBatch } from '../lib/gsc/flow';
 import { buildGscUrl } from '../lib/gsc/url';
 import { PROBES } from '../lib/gsc/selectors';
-import { runBatch as bingRunBatch } from '../lib/bing/flow';
-import { buildBingUrl } from '../lib/bing/url';
-import { PROBES as BING_PROBES } from '../lib/bing/selectors';
-import { getSettings } from '../lib/storage/settings';
+import { getSettings, isValidIndexNowKey } from '../lib/storage/settings';
+import { submitUrls, groupByHost } from '../lib/indexnow/submit';
 import { GSC_PORT_NAME, BING_PORT_NAME, SITEMAP_PORT_NAME } from '../lib/messaging/protocol';
-import type { GscRequest, GscEvent, BingRequest, BingEvent, SitemapRequest, SitemapEvent } from '../lib/messaging/types';
+import type { GscRequest, GscEvent, BingRequest, BingEvent, SitemapRequest, SitemapEvent, SubmitResult } from '../lib/messaging/types';
 import { handleSitemapRequest } from '../lib/sitemap/handler';
 import { getGeoPref, applyGeo, resolveGeo, GEO_STORAGE_KEY, DEFAULT_GEO_CODE, type GeoCode } from '../lib/quicksearch/geo';
 
@@ -49,21 +47,6 @@ const LOGIN_CHECK_EXPR =
   `hasInspectInput: !!(${PROBES.inspectInput}),` +
   `isLoginScreen: /accounts\\.google\\.com|signin/i.test(location.href),` +
   `needsVerify: ${PROBES.isNotOwned}` +
-  `})`;
-
-/** Bing SPA 加载完成的等待超时（与 GSC 同量级，bing-probe §1）。 */
-const BING_LOAD_TIMEOUT_MS = 30000;
-const BING_LOAD_INTERVAL_MS = 1000;
-
-/**
- * Bing 登录态检测表达式（bing-probe §3）。
- * Bing 的 siteUrl 资源权限由 URL 参数锁定，无 GSC 的 needsVerify 分支；未登录会跳登录页。
- */
-const BING_LOGIN_CHECK_EXPR =
-  `JSON.stringify({` +
-  `url: location.href,` +
-  `hasInspectInput: !!(${BING_PROBES.inspectInput}),` +
-  `isLoginScreen: /login|signin|account\\.live\\.com|identity/i.test(location.href)` +
   `})`;
 
 export default defineBackground(() => {
@@ -239,81 +222,59 @@ export default defineBackground(() => {
   }
 
   /**
-   * 编排一次 Bing 批量执行（与 handleStart 同构，换 Bing URL/flow/事件）。
+   * 编排一次 Bing 批量提交（IndexNow API 版）。
    *
-   * 流程：用 domain 拼 URL → 开 tab → attach → 等 SPA 就绪（§1）→ 登录前置检查（§3）
-   *   → bingRunBatch（推 BING_STATE / BING_LOG，shouldStop 接闭包 stop 标志）→ 推 BING_DONE → detach。
-   * 任一阶段失败：推 error 日志 + BING_DONE，确保 UI 一定能收到结束事件。
-   * Bing 无需 accountIndex（siteUrl 直接用 domain），故不读 settings。
+   * 流程：读 settings.indexnowKey 并校验 → 按 hostname 分组 → 逐组 fetch POST 到 IndexNow
+   *   → 按状态码把每条 URL 映射为 SubmitResult（ok / skipped+reason）→ 推 BING_STATE/BING_LOG/BING_DONE。
+   * 未配 key / key 非法：推 error 日志 + BING_DONE(全 skipped)。
+   * fetch 抛错（断网/DNS）：该组记 skipped + reason「网络错误:…」。
+   *
+   * 替代旧版 CDP 编排（开 tab / attach / 等 SPA / 检查登录 / 逐条 evalJs 操控 DOM / detach）。
+   * 一次 POST 通常 1-3s，无 SW 回收风险；host_permissions(<all_urls>) 覆盖跨域 fetch。
    */
   async function handleBingStart(
     port: chrome.runtime.Port,
     msg: { domain: string; urls: string[] },
     shouldStop: () => boolean,
   ): Promise<void> {
-    const bingUrl = buildBingUrl(msg.domain);
+    const { indexnowKey } = await getSettings();
+    if (!indexnowKey || !isValidIndexNowKey(indexnowKey)) {
+      emit(port, { type: 'BING_LOG', level: 'error', phase: 'system', message: '未配置有效的 IndexNow 密钥，请在下方生成' });
+      emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: msg.urls.length });
+      return;
+    }
+    if (shouldStop()) return;
 
-    emit(port, { type: 'BING_LOG', level: 'info', phase: 'system', message: '打开 Bing…' });
-    const tab = await chrome.tabs.create({ url: bingUrl, active: false });
-    const target: Target = { tabId: tab.id! };
-    await attach(target);
+    emit(port, { type: 'BING_STATE', state: 'running', total: msg.urls.length, done: 0, results: [] });
+    emit(port, { type: 'BING_LOG', level: 'info', phase: 'system', message: `提交 ${msg.urls.length} 条到 IndexNow…` });
 
-    try {
-      const t0 = Date.now();
-      await waitForLoad(target).catch(() => undefined);
-      const ready = await waitForPredicate(
-        target,
-        `location.href.startsWith('https://www.bing.com/webmasters/urlinspection') && !!(${BING_PROBES.inspectInput})`,
-        { timeoutMs: BING_LOAD_TIMEOUT_MS, intervalMs: BING_LOAD_INTERVAL_MS },
-      );
-      if (!ready) {
-        emit(port, { type: 'BING_LOG', level: 'error', phase: 'system', message: 'Bing 页面加载超时' });
-        emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: 0 });
-        return;
+    // 初始化全部 skipped(未执行)；成功者覆盖为 ok
+    const results: SubmitResult[] = msg.urls.map((u): SubmitResult => ({ url: u, status: 'skipped', reason: '未执行' }));
+
+    for (const [host, urls] of groupByHost(msg.urls)) {
+      if (shouldStop()) break;
+      let r: { ok: boolean; status: number; reason?: string };
+      try {
+        r = await submitUrls(indexnowKey, host, urls);
+      } catch (e) {
+        r = { ok: false, status: 0, reason: `网络错误：${(e as Error).message ?? String(e)}` };
       }
-      emit(port, { type: 'BING_LOG', level: 'info', phase: 'system', message: `页面就绪 ✓ (${fmtMs(Date.now() - t0)})` });
-
-      // 登录态前置检查（§3）
-      const check = await evalJs<{ isLoginScreen: boolean }>(target, BING_LOGIN_CHECK_EXPR);
-      if (check.isLoginScreen) {
-        emit(port, { type: 'BING_LOG', level: 'error', phase: 'system', message: '未登录 Bing Webmaster，请在浏览器登录后重试' });
-        emit(port, { type: 'BING_DONE', ok: 0, failed: 0, skipped: 0 });
-        return;
+      for (const u of urls) {
+        const row = results.find((x) => x.url === u);
+        if (!row) continue;
+        if (r.ok) { row.status = 'ok'; row.reason = undefined; }
+        else { row.reason = r.reason; }
       }
-      emit(port, { type: 'BING_LOG', level: 'info', phase: 'system', message: '登录态正常' });
-
-      // 批量提交；shouldStop 接闭包 stop 标志，BING_CANCEL 可在下一条 URL 前中止。
-      const summary = await bingRunBatch(target, msg.urls, {
-        onProgress: (s) =>
-          emit(port, {
-            type: 'BING_STATE',
-            state: 'running',
-            total: s.total,
-            done: s.done,
-            currentUrl: s.currentUrl,
-            results: s.results,
-          }),
-        onLog: (e) =>
-          emit(port, { type: 'BING_LOG', level: e.level, phase: e.phase, message: e.message }),
-        shouldStop,
-      });
-
-      emit(port, {
-        type: 'BING_DONE',
-        ok: summary.ok,
-        failed: summary.failed,
-        skipped: summary.skipped,
-      });
-    } catch (e) {
       emit(port, {
         type: 'BING_LOG',
-        level: 'error',
-        phase: 'system',
-        message: (e as Error).message ?? String(e),
+        level: r.ok ? 'info' : 'error',
+        phase: 'submit',
+        message: r.ok ? `→ ${host}：已提交 ${urls.length} 条` : `→ ${host}：${r.reason}`,
       });
-      emit(port, { type: 'BING_DONE', ok: 0, failed: 1, skipped: 0 });
-    } finally {
-      await detach(target).catch(() => undefined);
     }
+
+    emit(port, { type: 'BING_STATE', state: 'running', total: msg.urls.length, done: msg.urls.length, results });
+    const ok = results.filter((r) => r.status === 'ok').length;
+    emit(port, { type: 'BING_DONE', ok, failed: 0, skipped: msg.urls.length - ok });
   }
 });
