@@ -1,0 +1,57 @@
+/**
+ * IndexNow API 提交。
+ *
+ * 实现依据：docs/superpowers/specs/2026-07-06-indexnow-api-migration-design.md §2/§5。
+ * 一次 POST 把整批 URL 通知给 IndexNow 网络（Bing/Yandex/Naver/Seznam/Yeep 自动共享）。
+ * 替代旧版 CDP 驱动 Bing Webmaster 页面的逐条提交链路。
+ */
+
+const ENDPOINT = 'https://api.indexnow.org/IndexNow';
+
+export interface IndexNowResult {
+  ok: boolean;
+  status: number;
+  reason?: string;
+}
+
+/**
+ * 按 IndexNow 协议整批提交。key 合法性由调用方负责。
+ * 不传 keyLocation：协议规定引擎自动到 https://<host>/<key>.txt 找验证文件。
+ * fetch 抛错时透传（调用方 catch 兜底成「网络错误」）。
+ */
+export async function submitUrls(key: string, host: string, urls: string[]): Promise<IndexNowResult> {
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ host, key, urlList: urls }),
+  });
+  if (res.status === 200) return { ok: true, status: 200 };
+  return { ok: false, status: res.status, reason: reasonFor(res.status) };
+}
+
+/** 把 IndexNow HTTP 状态码映射为可读原因（供 UI 日志展示）。 */
+export function reasonFor(status: number): string {
+  switch (status) {
+    case 400: return '请求格式错误';
+    case 403: return '密钥无效：站点根目录未找到 <key>.txt，或文件内容与密钥不匹配';
+    case 422: return 'URL 不属于该域名，或域名与密钥不匹配';
+    case 429: return '提交过于频繁，请稍后再试';
+    default: return `IndexNow 返回 ${status}`;
+  }
+}
+
+/**
+ * 按 hostname 分组 URL。IndexNow 要求 body.host 与 urlList 每条 URL 的 host 完全一致，
+ * 否则 422；sitemap 可能混 www/裸域名，分组后逐组提交避免整批失败。
+ * 非法 URL（new URL 抛错）跳过。
+ */
+export function groupByHost(urls: string[]): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  for (const u of urls) {
+    let h: string;
+    try { h = new URL(u).hostname; } catch { continue; }
+    if (!m.has(h)) m.set(h, []);
+    m.get(h)!.push(u);
+  }
+  return m;
+}
