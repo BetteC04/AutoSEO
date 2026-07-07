@@ -68,3 +68,48 @@ describe('useIndexNowKey', () => {
     clickSpy.mockRestore();
   });
 });
+
+describe('useIndexNowKey - testConnection', () => {
+  it('预置 key 后 testConnection 成功 → testStatus:ok + 成功消息含 host', async () => {
+    const { updateSettings } = await import('../lib/storage/settings');
+    await updateSettings({ indexnowKey: 'preconfigured-key-1234567890' });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      text: () => Promise.resolve('preconfigured-key-1234567890'),
+    } as unknown as Response);
+    const { result } = renderHook(() => useIndexNowKey());
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current.testStatus).toBe('idle');
+    await act(async () => { await result.current.testConnection('example.com'); });
+    expect(result.current.testStatus).toBe('ok');
+    expect(result.current.testMessage).toMatch(/已正确部署/);
+    expect(result.current.testMessage).toContain('example.com');
+    vi.restoreAllMocks();
+  });
+
+  it('testConnection 失败（404）→ testStatus:fail + 原因', async () => {
+    const { updateSettings } = await import('../lib/storage/settings');
+    await updateSettings({ indexnowKey: 'preconfigured-key-1234567890' });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 404 } as Response);
+    const { result } = renderHook(() => useIndexNowKey());
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => { await result.current.testConnection('example.com'); });
+    expect(result.current.testStatus).toBe('fail');
+    expect(result.current.testMessage).toMatch(/未找到/);
+    vi.restoreAllMocks();
+  });
+
+  it('testing 期间 testStatus 为 testing', async () => {
+    const { updateSettings } = await import('../lib/storage/settings');
+    await updateSettings({ indexnowKey: 'preconfigured-key-1234567890' });
+    vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useIndexNowKey());
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => {
+      result.current.testConnection('example.com'); // 不 await，让 fetch 挂起
+      await Promise.resolve();
+    });
+    expect(result.current.testStatus).toBe('testing');
+    vi.restoreAllMocks();
+  });
+});
