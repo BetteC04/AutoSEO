@@ -1,8 +1,9 @@
-export type Tab = 'site' | 'keyword';
+export type Tab = 'site' | 'keyword' | 'rankings';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'site', label: '网站工具' },
   { key: 'keyword', label: '关键词工具' },
+  { key: 'rankings', label: '常用榜单' },
 ];
 
 export default function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {

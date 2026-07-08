@@ -127,3 +127,26 @@ export function IconRefresh({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+/** 榜单排名 — 奖杯(表「排名/榜单」)。 */
+export function IconTrophy({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 4h12v4a6 6 0 0 1-12 0V4z" />
+      <path d="M6 6H4.5a2.5 2.5 0 0 0 0 5H6" />
+      <path d="M18 6h1.5a2.5 2.5 0 0 1 0 5H18" />
+      <path d="M12 14v4" />
+      <path d="M10 18h4l1 3H9z" />
+    </svg>
+  );
+}
+
+/** 引荐来源 — 链节(表「外链/引荐流量」)。 */
+export function IconLink({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
